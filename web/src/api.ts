@@ -1,6 +1,6 @@
 import type { ChatResponse, DashboardDetail } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export async function fetchDashboardDetail(userId: string): Promise<DashboardDetail> {
   const response = await fetch(`${API_BASE}/v1/dashboard/${userId}/detail`);
