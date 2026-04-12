@@ -52,7 +52,7 @@ uvicorn gemma_tutor_edge.app:app --reload
 ### Install
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e .[dev]
 ```
@@ -64,13 +64,33 @@ Copy `.env.example` to `.env` and edit values.
 ### Start API
 
 ```bash
-uvicorn gemma_tutor_edge.app:app --reload
+./scripts/run_dev_api.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\run_dev_api.ps1
+```
+
+### Start frontend dashboard
+
+The React/Vite dashboard lives under `web/` and requires `Node.js 18+`.
+
+```bash
+./scripts/run_frontend_dev.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\run_frontend_dev.ps1
 ```
 
 ### Run harness
 
 ```bash
-python -m gemma_tutor_edge.harness.runner --mode asgi
+.venv/bin/python -m gemma_tutor_edge.harness.runner --mode asgi
 ```
 
 ## Key environment variables
@@ -90,6 +110,17 @@ This project keeps the **same Pydantic-AI agent structure** while swapping the m
 - Google path uses the Gemini API via API key based auth.
 - `llama.cpp` path uses an OpenAI-compatible `/v1/chat/completions` endpoint.
 
+## Verified Local Dev Setup
+
+The current repository has been validated with:
+
+- `.venv` for backend execution
+- FastAPI app running through `scripts/run_dev_api.sh`
+- Gemini-backed `/v1/chat` working with a valid `GEMINI_API_KEY`
+- Node.js 20 and npm 10 for the `web/` Vite dashboard
+
+If the frontend fails to start, check `node --version` first. `Vite 5` requires `Node.js 18+`.
+
 ## Recommended next steps
 
 1. Replace placeholder tutor prompts with your final education-specific system prompts.
@@ -101,8 +132,8 @@ This project keeps the **same Pydantic-AI agent structure** while swapping the m
 
 ## Added in this scaffold update
 
-### Frontend dashboard
-A React + Vite dashboard scaffold is included under `web/`.
+### Frontend dashboard and learner workspace
+A React + Vite frontend scaffold is included under `web/`.
 It is designed for competition demos and currently renders:
 - learner progress cards
 - skill snapshot table
@@ -110,6 +141,7 @@ It is designed for competition demos and currently renders:
 - ready quiz pack list
 - achievements
 - roadmap placeholders
+- a separate learner workspace shell for study flow
 
 ### Background worker
 A polling worker is included at `src/gemma_tutor_edge/worker.py`.

@@ -48,3 +48,23 @@ export type DashboardDetail = {
   active_jobs: BackgroundJob[];
   roadmap_placeholders: string[];
 };
+
+export type TutorResponse = {
+  message: string;
+  detected_intent: "chat" | "quiz_request" | "analysis" | "memory_update" | "image_learning";
+  memory_to_store: {
+    memory_id: string;
+    category: string;
+    content: string;
+    confidence: number;
+    created_at: string;
+  }[];
+  suggested_next_actions: string[];
+};
+
+export type ChatResponse = {
+  session_id: string;
+  run_id: string;
+  output: TutorResponse;
+  usage: Record<string, unknown>;
+};

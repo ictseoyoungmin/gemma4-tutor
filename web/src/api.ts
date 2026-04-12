@@ -1,4 +1,4 @@
-import type { DashboardDetail } from "./types";
+import type { ChatResponse, DashboardDetail } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
@@ -22,6 +22,27 @@ export async function queuePrebuildJob(userId: string, topic: string) {
   });
   if (!response.ok) {
     throw new Error(`Failed to queue job: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function sendChatMessage(
+  userId: string,
+  message: string,
+  sessionId?: string | null,
+): Promise<ChatResponse> {
+  const response = await fetch(`${API_BASE}/v1/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      session_id: sessionId ?? undefined,
+      message,
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to send chat message: ${response.status} ${detail}`);
   }
   return response.json();
 }

@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchDashboardDetail, queuePrebuildJob } from "./api";
-import { AudioPanelPlaceholder } from "./components/AudioPanelPlaceholder";
-import { ChatWorkspacePlaceholder } from "./components/ChatWorkspacePlaceholder";
-import { ImageLessonPlaceholder } from "./components/ImageLessonPlaceholder";
+import { LearnerWorkspace } from "./components/LearnerWorkspace";
 import { SectionCard } from "./components/SectionCard";
 import { StatCard } from "./components/StatCard";
 import type { DashboardDetail } from "./types";
 
 const defaultUserId = "demo-user";
+type FrontendView = "dashboard" | "workspace";
 
 export default function App() {
   const [userId, setUserId] = useState(defaultUserId);
   const [detail, setDetail] = useState<DashboardDetail | null>(null);
   const [status, setStatus] = useState("Loading dashboard...");
+  const [view, setView] = useState<FrontendView>("dashboard");
 
   useEffect(() => {
     void loadDashboard(userId);
@@ -72,10 +72,10 @@ export default function App() {
           <div style={{ fontSize: 12, letterSpacing: 1.2, textTransform: "uppercase", opacity: 0.65 }}>
             Gemma Tutor Edge
           </div>
-          <h1 style={{ margin: "8px 0 0", fontSize: 34 }}>Frontend Dashboard Scaffold</h1>
+          <h1 style={{ margin: "8px 0 0", fontSize: 34 }}>Dashboard + Learner Workspace</h1>
           <p style={{ marginTop: 8, maxWidth: 820, lineHeight: 1.55, opacity: 0.8 }}>
-            Competition demo UI for learner progress, ready quiz packs, achievements, and background job visibility.
-            Chat, image learning, and detailed analytics panels are intentionally scaffolded for later implementation.
+            Keep the analytics dashboard for progress visibility while adding a dedicated learner workspace for
+            tutoring, practice, and multimodal study. The two surfaces are intentionally separated.
           </p>
         </div>
         <div style={toolbarStyle}>
@@ -85,8 +85,26 @@ export default function App() {
         </div>
       </header>
 
+      <div style={viewSwitchStyle}>
+        <button
+          onClick={() => setView("dashboard")}
+          style={view === "dashboard" ? activeViewButtonStyle : inactiveViewButtonStyle}
+        >
+          Dashboard
+        </button>
+        <button
+          onClick={() => setView("workspace")}
+          style={view === "workspace" ? activeViewButtonStyle : inactiveViewButtonStyle}
+        >
+          Learner Workspace
+        </button>
+      </div>
+
       <div style={statusStyle}>{status}</div>
 
+      {view === "workspace" ? <LearnerWorkspace userId={userId} /> : null}
+      {view === "dashboard" ? (
+        <>
       <div style={statsGridStyle}>
         {stats.map((item) => (
           <StatCard key={item.label} label={item.label} value={item.value} hint={item.hint} />
@@ -133,20 +151,6 @@ export default function App() {
         </SectionCard>
       </div>
 
-
-      <div style={twoColGridStyle}>
-        <SectionCard title="Chat Workspace (Placeholder)">
-          <ChatWorkspacePlaceholder />
-        </SectionCard>
-
-        <SectionCard title="Image & Audio Learning (Placeholders)">
-          <div style={{ display: "grid", gap: 16 }}>
-            <ImageLessonPlaceholder />
-            <AudioPanelPlaceholder />
-          </div>
-        </SectionCard>
-      </div>
-
       <div style={twoColGridStyle}>
         <SectionCard title="Achievements">
           <ul style={listStyle}>
@@ -167,6 +171,8 @@ export default function App() {
           </ul>
         </SectionCard>
       </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -225,6 +231,36 @@ const statusStyle: React.CSSProperties = {
   padding: 12,
   borderRadius: 14,
   background: "#e2e8f0",
+};
+
+const viewSwitchStyle: React.CSSProperties = {
+  display: "inline-flex",
+  gap: 8,
+  padding: 6,
+  borderRadius: 16,
+  background: "white",
+  border: "1px solid #e2e8f0",
+  marginBottom: 16,
+};
+
+const activeViewButtonStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: "none",
+  padding: "10px 14px",
+  background: "#111827",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 600,
+};
+
+const inactiveViewButtonStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: "none",
+  padding: "10px 14px",
+  background: "transparent",
+  color: "#334155",
+  cursor: "pointer",
+  fontWeight: 600,
 };
 
 const statsGridStyle: React.CSSProperties = {

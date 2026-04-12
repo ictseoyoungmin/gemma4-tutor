@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/api.ts","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/AudioPanelPlaceholder.tsx","./src/components/ImageLessonPlaceholder.tsx","./src/components/LearnerWorkspace.tsx","./src/components/SectionCard.tsx","./src/components/StatCard.tsx","./src/components/TutorChatPanel.tsx"],"version":"5.9.3"}
