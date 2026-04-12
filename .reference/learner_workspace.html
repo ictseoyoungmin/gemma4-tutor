@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StudyOS — Learner Workspace</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg0: #0e0c0a;
+    --bg1: #161310;
+    --bg2: #1e1a15;
+    --bg3: #27211a;
+    --border: rgba(255,255,255,0.08);
+    --border-mid: rgba(255,255,255,0.13);
+    --text0: #f5ede0;
+    --text1: #c4b49a;
+    --text2: #7d6f5e;
+    --amber0: #faeeda;
+    --amber1: #fac775;
+    --amber2: #ef9f27;
+    --amber3: #ba7517;
+    --amber4: #854f0b;
+    --amber5: #412402;
+    --green-bg: #1a2710;
+    --green-txt: #8ab85a;
+    --serif: 'Lora', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --mono: 'SF Mono', 'Fira Code', monospace;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg0);
+    color: var(--text0);
+    font-size: 14px;
+    line-height: 1.5;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Nav ── */
+  nav {
+    height: 52px;
+    background: var(--bg1);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    flex-shrink: 0;
+  }
+  .nav-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 15px; font-weight: 500; color: var(--text0);
+  }
+  .nav-logo {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--amber4);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-logo-inner {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    background: var(--amber1);
+  }
+  .nav-right { display: flex; align-items: center; gap: 18px; }
+  .nav-streak {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text2);
+  }
+  .nav-streak strong { color: var(--amber2); font-weight: 500; }
+  .nav-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--bg3);
+    border: 1px solid var(--border-mid);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 500; color: var(--amber1);
+  }
+
+  /* ── Layout ── */
+  .ws-body {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    background: var(--bg1);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .eyebrow {
+    font-size: 10px;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--amber3);
+    margin-bottom: 5px;
+  }
+  .sidebar-title {
+    font-family: var(--serif);
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--text0);
+    margin-bottom: 13px;
+    line-height: 1.3;
+  }
+  .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    padding: 5px 11px;
+    border-radius: 999px;
+    border: 1px solid var(--border-mid);
+    font-size: 12px;
+    color: var(--text1);
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.15s;
+    font-family: var(--sans);
+  }
+  .chip:hover { border-color: var(--amber3); color: var(--amber1); }
+  .chip.active {
+    background: var(--amber5);
+    border-color: var(--amber4);
+    color: var(--amber1);
+  }
+
+  /* ── Chat ── */
+  .chat-transcript {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bg3) transparent;
+  }
+  .bubble-row-user { display: flex; justify-content: flex-end; }
+  .bubble-row-ai { display: flex; align-items: flex-end; gap: 8px; }
+
+  .ai-avatar {
+    width: 24px; height: 24px; border-radius: 7px;
+    background: var(--amber5); border: 1px solid var(--amber4);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .ai-avatar-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px; background: var(--amber2);
+  }
+
+  .bubble-user {
+    max-width: 82%;
+    padding: 10px 14px;
+    border-radius: 16px 16px 4px 16px;
+    background: var(--bg3);
+    border: 1px solid var(--border-mid);
+    font-size: 13px; line-height: 1.6;
+    color: var(--text0);
+  }
+  .bubble-ai {
+    max-width: 84%;
+    padding: 10px 14px;
+    border-radius: 4px 16px 16px 16px;
+    background: #1f1408;
+    border: 1px solid var(--amber4);
+    font-size: 13px; line-height: 1.65;
+    color: var(--amber0);
+  }
+  .bubble-meta {
+    margin-top: 7px;
+    font-size: 11px;
+    color: var(--amber4);
+    font-family: var(--mono);
+    opacity: 0.8;
+  }
+  .sugg-row { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
+  .sugg-chip {
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: transparent;
+    border: 1px solid var(--amber4);
+    color: var(--amber2);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: background 0.15s;
+  }
+  .sugg-chip:hover { background: var(--amber5); }
+
+  /* ── Status ── */
+  .chat-status {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--green-bg);
+    border: 1px solid rgba(99,153,34,0.3);
+    font-size: 11px; color: var(--green-txt);
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green-txt);
+  }
+  .session-id {
+    font-size: 11px; color: var(--text2);
+    font-family: var(--mono);
+  }
+
+  /* ── Composer ── */
+  .composer { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .composer-inner {
+    display: flex; align-items: flex-end; gap: 8px;
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius-lg);
+    padding: 10px 12px;
+    background: var(--bg2);
+    transition: border-color 0.15s;
+  }
+  .composer-inner:focus-within { border-color: var(--amber4); }
+  .composer-input {
+    flex: 1;
+    font-size: 13px; line-height: 1.5;
+    color: var(--text2);
+    font-family: var(--sans);
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+  }
+  .composer-send {
+    padding: 7px 16px;
+    border-radius: 9px;
+    background: var(--amber3);
+    color: var(--amber0);
+    font-size: 12px; font-weight: 500;
+    border: none; cursor: pointer;
+    font-family: var(--sans);
+    transition: background 0.15s;
+  }
+  .composer-send:hover { background: var(--amber2); }
+
+  /* ── Main ── */
+  main {
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bg3) transparent;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    border-radius: var(--radius-xl);
+    padding: 26px;
+    background: var(--bg1);
+    border: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 24px;
+    align-items: center;
+  }
+  .hero-eyebrow {
+    font-size: 10px; letter-spacing: 1.8px;
+    text-transform: uppercase; color: var(--amber3);
+    margin-bottom: 8px;
+  }
+  .hero-title {
+    font-family: var(--serif);
+    font-size: 28px; font-weight: 400;
+    color: var(--text0); line-height: 1.2;
+    margin-bottom: 10px;
+  }
+  .hero-copy {
+    font-size: 13px; line-height: 1.7;
+    color: var(--text1); max-width: 460px;
+  }
+  .hero-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    text-align: center;
+  }
+  .stat-num {
+    display: block;
+    font-size: 22px; font-weight: 400;
+    font-family: var(--serif);
+    color: var(--text0);
+  }
+  .stat-num.amber { color: var(--amber2); }
+  .stat-label {
+    font-size: 11px; color: var(--text2);
+    margin-top: 2px;
+  }
+
+  /* ── Section head ── */
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .section-label {
+    font-size: 10px; letter-spacing: 1.4px;
+    text-transform: uppercase; color: var(--text2);
+  }
+  .section-action {
+    font-size: 12px; color: var(--amber3); cursor: pointer;
+  }
+  .section-action:hover { color: var(--amber2); }
+
+  /* ── Practice grid ── */
+  .practice-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .module-card {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: var(--bg1);
+    padding: 18px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.18s, background 0.18s;
+  }
+  .module-card:hover { border-color: var(--border-mid); background: var(--bg2); }
+  .module-card.featured {
+    border-color: var(--amber4);
+    background: #1c1005;
+  }
+  .module-card.featured:hover { background: #211308; }
+  .module-badge {
+    position: absolute; top: 12px; right: 12px;
+    padding: 3px 8px; border-radius: 999px;
+    font-size: 10px; background: var(--amber4);
+    color: var(--amber1);
+  }
+  .module-icon {
+    width: 32px; height: 32px; border-radius: 9px;
+    margin-bottom: 11px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .module-icon.amber { background: var(--amber4); }
+  .module-icon.gray { background: var(--bg3); }
+  .module-icon.green { background: #1a2710; border: 1px solid rgba(99,153,34,0.3); }
+  .module-icon-shape {
+    width: 14px; height: 14px; border-radius: 3px;
+  }
+  .module-icon.amber .module-icon-shape { background: var(--amber1); }
+  .module-icon.gray .module-icon-shape { background: var(--text2); }
+  .module-icon.green .module-icon-shape { background: var(--green-txt); border-radius: 50%; }
+  .module-title {
+    font-size: 13px; font-weight: 500;
+    color: var(--text0); margin-bottom: 5px; line-height: 1.3;
+  }
+  .module-card.featured .module-title { color: var(--amber0); }
+  .module-desc {
+    font-size: 12px; color: var(--text2); line-height: 1.55;
+  }
+  .module-card.featured .module-desc { color: var(--amber4); }
+
+  /* ── Queue ── */
+  .queue-card {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: var(--bg1);
+    padding: 6px 20px;
+  }
+  .queue-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .queue-item:last-child { border-bottom: none; }
+  .queue-num {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--bg3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 500; color: var(--text2);
+    flex-shrink: 0;
+  }
+  .queue-text { font-size: 13px; color: var(--text1); line-height: 1.4; }
+  .queue-status {
+    margin-left: auto;
+    font-size: 10px; color: var(--text2);
+    white-space: nowrap;
+  }
+
+  /* ── Media panels ── */
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .media-card {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: var(--bg1);
+    padding: 20px;
+  }
+  .media-title { font-size: 14px; font-weight: 500; margin-bottom: 5px; color: var(--text0); }
+  .media-copy { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 14px; }
+  .media-placeholder {
+    border-radius: var(--radius-md);
+    background: var(--bg2);
+    border: 1px dashed var(--border-mid);
+    height: 80px;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 6px;
+  }
+  .media-ph-txt { font-size: 11px; color: var(--text2); }
+  .coming-badge {
+    display: inline-flex; align-items: center;
+    margin-top: 10px;
+    padding: 3px 9px; border-radius: 999px;
+    font-size: 10px; letter-spacing: 0.9px;
+    text-transform: uppercase;
+    background: var(--bg3); color: var(--text2);
+    border: 1px solid var(--border-mid);
+  }
+
+  /* waveform bars */
+  .waveform {
+    display: flex; gap: 2px; align-items: flex-end; height: 16px;
+  }
+  .waveform span {
+    width: 2px; border-radius: 1px;
+    background: var(--text2);
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav>
+  <div class="nav-brand">
+    <div class="nav-logo"><div class="nav-logo-inner"></div></div>
+    StudyOS
+  </div>
+  <div class="nav-right">
+    <div class="nav-streak">연속 학습 <strong>12일</strong></div>
+    <div class="nav-avatar">JS</div>
+  </div>
+</nav>
+
+<div class="ws-body">
+
+  <!-- ── Sidebar ── -->
+  <aside>
+    <div class="sidebar-header">
+      <div class="eyebrow">AI 튜터</div>
+      <div class="sidebar-title">오늘 무엇을 연습할까요?</div>
+      <div class="chip-row">
+        <button class="chip active">TOEIC Part 5 팁</button>
+        <button class="chip">문장 교정</button>
+        <button class="chip">워밍업</button>
+      </div>
+    </div>
+
+    <div class="chat-transcript">
+
+      <div class="bubble-row-ai">
+        <div class="ai-avatar"><div class="ai-avatar-dot"></div></div>
+        <div>
+          <div class="bubble-ai">
+            안녕하세요! 오늘 학습을 시작할게요. TOEIC Part 5나 문장 교정, 혹은 간단한 워밍업 중 어떤 것부터 할까요?
+            <div class="bubble-meta">intent: chat</div>
+            <div class="sugg-row">
+              <button class="sugg-chip">Part 5 풀기</button>
+              <button class="sugg-chip">문장 교정</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bubble-row-user">
+        <div class="bubble-user">TOEIC Part 5 팁 하나 짧게 알려줘.</div>
+      </div>
+
+      <div class="bubble-row-ai">
+        <div class="ai-avatar"><div class="ai-avatar-dot"></div></div>
+        <div>
+          <div class="bubble-ai">
+            <strong style="font-weight:500;color:var(--amber1);">품사 먼저 확인하세요.</strong><br>
+            빈칸 앞뒤 단어를 보고 명사·동사·형용사·부사 중 어느 품사가 필요한지 파악하면 오답을 빠르게 제거할 수 있어요.
+            <div class="bubble-meta">intent: chat · 메모리 저장됨</div>
+            <div class="sugg-row">
+              <button class="sugg-chip">예제 문제 풀기</button>
+              <button class="sugg-chip">다음 팁</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bubble-row-user">
+        <div class="bubble-user">예제 문제 하나 내줘.</div>
+      </div>
+
+      <div class="bubble-row-ai">
+        <div class="ai-avatar"><div class="ai-avatar-dot"></div></div>
+        <div>
+          <div class="bubble-ai">
+            The manager's _____ to finish the report by Friday was commendable.<br><br>
+            (A) decide &nbsp;(B) decisive &nbsp;(C) decision &nbsp;(D) decided<br><br>
+            어떤 답이라고 생각하세요?
+            <div class="bubble-meta">intent: quiz_request</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="chat-status">
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        튜터 연결됨
+      </div>
+      <div class="session-id">sess: a3f9…</div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-inner">
+        <textarea class="composer-input" rows="2" placeholder="메시지를 입력하거나 위 예문에 답해보세요…"></textarea>
+        <button class="composer-send">전송</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main>
+
+    <!-- Hero -->
+    <div class="hero">
+      <div>
+        <div class="hero-eyebrow">Learner Workspace</div>
+        <div class="hero-title">집중 학습 플로우</div>
+        <div class="hero-copy">튜터 채팅, 문제 풀기, 설명 확인까지 한 곳에서 이어지는 학습 경험. 좌측 튜터와 대화하며 우측에서 연습 모듈을 실행하세요.</div>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <span class="stat-num amber">87</span>
+          <div class="stat-label">평균 점수</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num">24</span>
+          <div class="stat-label">퀴즈 완료</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num">142</span>
+          <div class="stat-label">메모리</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num">5</span>
+          <div class="stat-label">Ready Pack</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Practice Modules -->
+    <div>
+      <div class="section-head">
+        <div class="section-label">연습 모듈</div>
+        <div class="section-action">전체 보기 →</div>
+      </div>
+      <div class="practice-grid">
+        <div class="module-card featured">
+          <div class="module-badge">추천</div>
+          <div class="module-icon amber">
+            <div class="module-icon-shape" style="border-radius:50%;"></div>
+          </div>
+          <div class="module-title">다음 학습 과제 요청</div>
+          <div class="module-desc">튜터에게 TOEIC 문제 또는 맞춤형 학습 태스크를 요청하세요.</div>
+        </div>
+        <div class="module-card">
+          <div class="module-icon gray">
+            <div class="module-icon-shape"></div>
+          </div>
+          <div class="module-title">작문 교정 워크스페이스</div>
+          <div class="module-desc">문장을 입력하고 즉각적인 교정과 설명을 받아보세요.</div>
+        </div>
+        <div class="module-card">
+          <div class="module-icon green">
+            <div class="module-icon-shape"></div>
+          </div>
+          <div class="module-title">Ready Pack 시작</div>
+          <div class="module-desc">저장된 퀴즈 팩을 불러와 집중 모드로 풀어보세요.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue -->
+    <div>
+      <div class="section-head">
+        <div class="section-label">예정 모듈</div>
+      </div>
+      <div class="queue-card">
+        <div class="queue-item">
+          <div class="queue-num">1</div>
+          <div class="queue-text">단일 TOEIC 문제 플로우 — 답 제출 후 즉시 해설 표시</div>
+          <div class="queue-status">개발 예정</div>
+        </div>
+        <div class="queue-item">
+          <div class="queue-num">2</div>
+          <div class="queue-text">작문 교정 워크스페이스 — 첨삭 및 재작성 보조</div>
+          <div class="queue-status">개발 예정</div>
+        </div>
+        <div class="queue-item">
+          <div class="queue-num">3</div>
+          <div class="queue-text">성찰 및 추천 패널 — 학습 후 요약과 다음 추천</div>
+          <div class="queue-status">개발 예정</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Media -->
+    <div>
+      <div class="section-head">
+        <div class="section-label">멀티미디어 학습</div>
+      </div>
+      <div class="bottom-grid">
+        <div class="media-card">
+          <div class="media-title">이미지 기반 학습</div>
+          <div class="media-copy">이미지를 업로드하면 어휘 추출, 멀티모달 분석, 이미지 기반 퀴즈를 생성합니다.</div>
+          <div class="media-placeholder">
+            <svg width="22" height="20" viewBox="0 0 22 20" fill="none">
+              <rect x="1" y="1" width="20" height="18" rx="3" stroke="#4a3f31" stroke-width="1.2"/>
+              <circle cx="7" cy="7" r="2" stroke="#4a3f31" stroke-width="1.2"/>
+              <path d="M1 14l5-5 4 4 3-3 5 5" stroke="#4a3f31" stroke-width="1.2" stroke-linejoin="round"/>
+            </svg>
+            <div class="media-ph-txt">이미지 드롭 또는 클릭</div>
+          </div>
+          <div class="coming-badge">Coming soon</div>
+        </div>
+        <div class="media-card">
+          <div class="media-title">오디오 연습</div>
+          <div class="media-copy">음성 인식, TTS 재생, 쉐도잉 연습, 발음 채점 기능이 제공될 예정입니다.</div>
+          <div class="media-placeholder">
+            <div class="waveform">
+              <span style="height:5px;"></span>
+              <span style="height:11px;"></span>
+              <span style="height:7px;"></span>
+              <span style="height:15px;"></span>
+              <span style="height:9px;"></span>
+              <span style="height:13px;"></span>
+              <span style="height:6px;"></span>
+              <span style="height:10px;"></span>
+              <span style="height:4px;"></span>
+            </div>
+            <div class="media-ph-txt">오디오 세션 준비 중</div>
+          </div>
+          <div class="coming-badge">Coming soon</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

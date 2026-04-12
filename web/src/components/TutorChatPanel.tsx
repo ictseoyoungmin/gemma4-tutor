@@ -77,22 +77,21 @@ export function TutorChatPanel({ userId }: { userId: string }) {
 
   return (
     <div style={panelStyle}>
-      <div style={statusRowStyle}>
-        <div style={badgeStyle}>{status}</div>
-        <div style={sessionStyle}>session: {sessionId ?? "new"}</div>
-      </div>
-
-      <div style={starterRowStyle}>
-        {starterPrompts.map((prompt) => (
-          <button
-            key={prompt}
-            type="button"
-            onClick={() => setDraft(prompt)}
-            style={promptChipStyle}
-          >
-            {prompt}
-          </button>
-        ))}
+      <div style={sidebarHeaderStyle}>
+        <div style={eyebrowStyle}>AI tutor</div>
+        <div style={sidebarTitleStyle}>What do you want to practice today?</div>
+        <div style={starterRowStyle}>
+          {starterPrompts.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              onClick={() => setDraft(prompt)}
+              style={promptChipStyle}
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div style={transcriptStyle}>
@@ -101,8 +100,8 @@ export function TutorChatPanel({ userId }: { userId: string }) {
             key={turn.id}
             style={turn.role === "user" ? userBubbleWrapStyle : assistantBubbleWrapStyle}
           >
+            {turn.role === "assistant" ? <div style={aiAvatarStyle}><div style={aiAvatarDotStyle} /></div> : null}
             <div style={turn.role === "user" ? userBubbleStyle : assistantBubbleStyle}>
-              <div style={bubbleRoleStyle}>{turn.role === "user" ? "You" : "Tutor"}</div>
               <div style={bubbleMessageStyle}>{turn.message}</div>
               {turn.meta ? <div style={bubbleMetaStyle}>{turn.meta}</div> : null}
               {turn.suggestions?.length ? (
@@ -124,6 +123,14 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         ))}
       </div>
 
+      <div style={statusRowStyle}>
+        <div style={badgeStyle}>
+          <div style={badgeDotStyle} />
+          {status}
+        </div>
+        <div style={sessionStyle}>session: {sessionId ?? "new"}</div>
+      </div>
+
       <form
         style={composerStyle}
         onSubmit={(event) => {
@@ -131,20 +138,19 @@ export function TutorChatPanel({ userId }: { userId: string }) {
           void handleSubmit(draft);
         }}
       >
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask the tutor for guidance, correction, or a practice prompt..."
-          style={textareaStyle}
-          rows={4}
-        />
-        <div style={composerFooterStyle}>
-          <div style={helperTextStyle}>
-            Uses `user_id={userId}` and keeps the returned chat session for follow-up turns.
+        <div style={composerShellStyle}>
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Ask the tutor for guidance, correction, or a practice prompt..."
+            style={textareaStyle}
+            rows={3}
+          />
+          <div style={composerFooterStyle}>
+            <button type="submit" style={sendButtonStyle} disabled={isSending}>
+              {isSending ? "Sending..." : "Send to Tutor"}
+            </button>
           </div>
-          <button type="submit" style={sendButtonStyle} disabled={isSending}>
-            {isSending ? "Sending..." : "Send to Tutor"}
-          </button>
         </div>
       </form>
     </div>
@@ -153,54 +159,60 @@ export function TutorChatPanel({ userId }: { userId: string }) {
 
 const panelStyle: React.CSSProperties = {
   display: "grid",
-  gap: 14,
+  gridTemplateRows: "auto minmax(0, 1fr) auto auto",
+  minHeight: "100%",
+  height: "100%",
 };
 
-const statusRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 10,
-  flexWrap: "wrap",
-  alignItems: "center",
+const sidebarHeaderStyle: React.CSSProperties = {
+  padding: "20px 20px 16px",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
 };
 
-const badgeStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  borderRadius: 999,
-  padding: "8px 12px",
-  background: "#eff6ff",
-  color: "#1d4ed8",
-  fontWeight: 600,
-  fontSize: 13,
+const eyebrowStyle: React.CSSProperties = {
+  fontSize: 10,
+  letterSpacing: 1.6,
+  textTransform: "uppercase",
+  color: "#ba7517",
+  marginBottom: 6,
+};
+
+const sidebarTitleStyle: React.CSSProperties = {
+  fontFamily: "\"Lora\", Georgia, serif",
+  fontSize: 18,
+  fontWeight: 400,
+  color: "#f5ede0",
+  lineHeight: 1.3,
+  marginBottom: 14,
 };
 
 const sessionStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: "#64748b",
+  fontSize: 11,
+  color: "#7d6f5e",
+  fontFamily: "\"SF Mono\", \"Fira Code\", monospace",
 };
 
 const starterRowStyle: React.CSSProperties = {
   display: "flex",
-  gap: 8,
+  gap: 6,
   flexWrap: "wrap",
 };
 
 const promptChipStyle: React.CSSProperties = {
   borderRadius: 999,
-  border: "1px solid #cbd5e1",
-  background: "#fff",
-  padding: "8px 12px",
+  border: "1px solid rgba(255,255,255,0.13)",
+  background: "transparent",
+  padding: "5px 11px",
   cursor: "pointer",
-  color: "#334155",
+  color: "#c4b49a",
+  fontSize: 12,
 };
 
 const transcriptStyle: React.CSSProperties = {
   display: "grid",
-  gap: 12,
-  maxHeight: 460,
+  gap: 14,
   overflowY: "auto",
-  padding: 4,
+  padding: "18px 20px",
 };
 
 const userBubbleWrapStyle: React.CSSProperties = {
@@ -210,95 +222,146 @@ const userBubbleWrapStyle: React.CSSProperties = {
 
 const assistantBubbleWrapStyle: React.CSSProperties = {
   display: "flex",
+  alignItems: "flex-end",
+  gap: 8,
   justifyContent: "flex-start",
 };
 
+const aiAvatarStyle: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  borderRadius: 7,
+  background: "#412402",
+  border: "1px solid #854f0b",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+};
+
+const aiAvatarDotStyle: React.CSSProperties = {
+  width: 10,
+  height: 10,
+  borderRadius: 2,
+  background: "#ef9f27",
+};
+
 const userBubbleStyle: React.CSSProperties = {
-  maxWidth: "86%",
-  borderRadius: 18,
-  padding: 14,
-  background: "#111827",
-  color: "white",
+  maxWidth: "82%",
+  borderRadius: "16px 16px 4px 16px",
+  padding: "10px 14px",
+  background: "#27211a",
+  border: "1px solid rgba(255,255,255,0.13)",
+  color: "#f5ede0",
+  fontSize: 13,
 };
 
 const assistantBubbleStyle: React.CSSProperties = {
-  maxWidth: "86%",
-  borderRadius: 18,
-  padding: 14,
-  background: "#f8fafc",
-  color: "#0f172a",
-  border: "1px solid #e2e8f0",
-};
-
-const bubbleRoleStyle: React.CSSProperties = {
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: 1,
-  opacity: 0.7,
-  marginBottom: 8,
+  maxWidth: "84%",
+  borderRadius: "4px 16px 16px 16px",
+  padding: "10px 14px",
+  background: "#1f1408",
+  color: "#faeeda",
+  border: "1px solid #854f0b",
+  fontSize: 13,
 };
 
 const bubbleMessageStyle: React.CSSProperties = {
   whiteSpace: "pre-wrap",
-  lineHeight: 1.6,
+  lineHeight: 1.65,
 };
 
 const bubbleMetaStyle: React.CSSProperties = {
-  marginTop: 10,
-  fontSize: 12,
-  opacity: 0.75,
+  marginTop: 8,
+  fontSize: 11,
+  color: "#854f0b",
+  fontFamily: "\"SF Mono\", \"Fira Code\", monospace",
+  opacity: 0.85,
 };
 
 const suggestionRowStyle: React.CSSProperties = {
   display: "flex",
-  gap: 8,
+  gap: 5,
   flexWrap: "wrap",
-  marginTop: 12,
+  marginTop: 9,
 };
 
 const suggestionChipStyle: React.CSSProperties = {
   borderRadius: 999,
-  border: "1px solid #bfdbfe",
-  background: "#dbeafe",
-  color: "#1d4ed8",
-  padding: "6px 10px",
+  border: "1px solid #854f0b",
+  background: "transparent",
+  color: "#ef9f27",
+  padding: "4px 9px",
   cursor: "pointer",
+  fontSize: 11,
+};
+
+const statusRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "8px 20px",
+  borderTop: "1px solid rgba(255,255,255,0.08)",
+};
+
+const badgeStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "4px 10px",
+  borderRadius: 999,
+  background: "#1a2710",
+  border: "1px solid rgba(99,153,34,0.3)",
+  color: "#8ab85a",
+  fontSize: 11,
+};
+
+const badgeDotStyle: React.CSSProperties = {
+  width: 6,
+  height: 6,
+  borderRadius: "50%",
+  background: "#8ab85a",
 };
 
 const composerStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 10,
+  padding: "12px 16px",
+  borderTop: "1px solid rgba(255,255,255,0.08)",
 };
 
 const textareaStyle: React.CSSProperties = {
   width: "100%",
-  borderRadius: 16,
-  border: "1px solid #cbd5e1",
-  padding: 14,
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  color: "#f5ede0",
   resize: "vertical",
   font: "inherit",
-  minHeight: 110,
+  minHeight: 76,
+  lineHeight: 1.55,
 };
 
 const composerFooterStyle: React.CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
+  justifyContent: "flex-end",
+  gap: 10,
   alignItems: "center",
-  flexWrap: "wrap",
-};
-
-const helperTextStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: "#64748b",
+  marginTop: 8,
 };
 
 const sendButtonStyle: React.CSSProperties = {
-  borderRadius: 12,
+  borderRadius: 9,
   border: "none",
-  padding: "10px 14px",
-  background: "#2563eb",
-  color: "white",
+  padding: "7px 16px",
+  background: "#ba7517",
+  color: "#faeeda",
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: 500,
+};
+
+const composerShellStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.13)",
+  borderRadius: 16,
+  padding: "10px 12px",
+  background: "#1e1a15",
 };
