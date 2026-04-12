@@ -25,6 +25,11 @@ The largest remaining gap is that the codebase is still a general tutor scaffold
 - generation audit logs,
 - TOEIC-specialized endpoints and tests.
 
+Frontend note after the latest learner-workspace pass:
+
+- the learner workspace shell now reflects the intended split-pane premium study UI much more closely,
+- the remaining frontend gap is now driven more by missing real TOEIC interactions than by missing layout fidelity.
+
 ## Current Alignment
 
 ### 1. Platform architecture
@@ -107,7 +112,26 @@ Impact:
 
 - The architectural slot exists, but most of the product-specific background value is still placeholder level.
 
-### 3. Harness and evaluation
+### 3. Learner workspace UI fidelity
+
+Current state:
+
+- the frontend now has a learner workspace that closely follows the `learner_workspace_v2` reference layout,
+- navigation, tutor sidebar, hero metrics, progress cards, module grid, media placeholders, and right-side study-status rail are all represented in the current UI,
+- the implementation has been split into smaller workspace-specific components rather than one monolithic file.
+
+Gap:
+
+- the center panels are still mostly launch surfaces and placeholders rather than a true TOEIC item-solving flow,
+- suggested chat actions still fill the draft instead of executing the next action directly,
+- Ready Pack and media zones are visually represented but not yet fully operational.
+
+Impact:
+
+- visual and interaction-shell alignment is much stronger than before,
+- the highest-value remaining gap is behavior and product flow rather than layout structure.
+
+### 4. Harness and evaluation
 
 Current state:
 

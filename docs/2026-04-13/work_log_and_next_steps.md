@@ -178,6 +178,31 @@ Verified:
 
 - backend test pass including the new CORS test.
 
+### 11. Learner Workspace UI fidelity pass
+
+Updated the learner workspace so it now tracks `.reference/learner_workspace_v2.html` much more closely instead of only borrowing the overall visual tone.
+
+Completed:
+
+- aligned the top navigation, left tutor chat column, center learning sections, and right study-status rail with the reference layout,
+- replaced the oversized inline-style workspace implementation with smaller workspace-focused components,
+- moved shared learner-workspace styling into a dedicated CSS file with shared tokens and responsive breakpoints,
+- preserved the real `/v1/chat` integration while restyling the tutor panel to match the reference more faithfully.
+
+Added or reorganized:
+
+- `web/src/components/workspace/workspace.css`
+- `web/src/components/workspace/workspaceData.ts`
+- `web/src/components/workspace/WorkspaceNav.tsx`
+- `web/src/components/workspace/WorkspaceMain.tsx`
+- `web/src/components/workspace/WorkspaceRightRail.tsx`
+- `web/src/components/workspace/TutorChatPanel.tsx`
+- thin wrappers in `web/src/components/LearnerWorkspace.tsx` and `web/src/components/TutorChatPanel.tsx`
+
+Verified:
+
+- frontend production build still succeeds after the refactor.
+
 ## Current State
 
 The project can now be described like this:
@@ -187,6 +212,7 @@ The project can now be described like this:
 - Frontend runs with Vite on Node 20.
 - The frontend is no longer dashboard-only.
 - Learner Workspace exists and can call the real tutor chat route.
+- Learner Workspace now visually follows the v2 reference structure much more closely and is split into smaller maintainable files.
 
 ## Remaining Work
 
@@ -207,7 +233,6 @@ The project can now be described like this:
 ### Frontend learner workspace work
 
 - Auto-send suggested next actions when clicked instead of only copying them into the draft field.
-- Add a proper chat transcript layout polish and loading states.
 - Add a real practice panel for TOEIC item presentation and answer submission.
 - Add ready-pack entry points from learner workspace.
 - Add image lesson and audio panels beyond placeholders.
@@ -249,6 +274,12 @@ The project can now be described like this:
 - `web/src/types.ts`
 - `web/src/components/LearnerWorkspace.tsx`
 - `web/src/components/TutorChatPanel.tsx`
+- `web/src/components/workspace/workspace.css`
+- `web/src/components/workspace/workspaceData.ts`
+- `web/src/components/workspace/WorkspaceNav.tsx`
+- `web/src/components/workspace/WorkspaceMain.tsx`
+- `web/src/components/workspace/WorkspaceRightRail.tsx`
+- `web/src/components/workspace/TutorChatPanel.tsx`
 - `docs/2026-04-13/design_gap_analysis.md`
 - `docs/frontend_dashboard.md`
 - `README.md`

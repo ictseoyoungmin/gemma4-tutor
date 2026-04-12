@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>StudyOS — Learner Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg0:#080706;
+  --bg1:#0f0d0b;
+  --bg2:#161310;
+  --bg3:#1e1916;
+  --bg4:#27211a;
+  --glass:rgba(255,255,255,0.03);
+  --glass-hover:rgba(255,255,255,0.055);
+  --b0:rgba(255,255,255,0.06);
+  --b1:rgba(255,255,255,0.10);
+  --b2:rgba(255,255,255,0.16);
+  --t0:#f0e6d3;
+  --t1:#b8a48a;
+  --t2:#6b5d4e;
+  --t3:#3d3128;
+  --a0:#fff4e0;
+  --a1:#ffd484;
+  --a2:#f0a832;
+  --a3:#c47d14;
+  --a4:#8a530a;
+  --a5:#5a3205;
+  --a6:#2e1902;
+  --g0:#1d2e12;
+  --g1:#8dc455;
+  --r0:#2e1212;
+  --r1:#e05454;
+  --sans:'Geist',system-ui,sans-serif;
+  --serif:'Instrument Serif',Georgia,serif;
+  --mono:'Geist Mono',monospace;
+  --rad-sm:8px;
+  --rad-md:12px;
+  --rad-lg:16px;
+  --rad-xl:20px;
+  --rad-2xl:24px;
+}
+
+html,body{height:100%;overflow:hidden;}
+body{
+  font-family:var(--sans);
+  background:var(--bg0);
+  color:var(--t0);
+  font-size:13px;
+  line-height:1.5;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ─── GRAIN OVERLAY ─── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;
+  z-index:9999;
+  opacity:.6;
+}
+
+/* ─── NAV ─── */
+nav{
+  height:50px;
+  background:var(--bg1);
+  border-bottom:1px solid var(--b0);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 22px;
+  flex-shrink:0;
+  position:relative;
+  z-index:10;
+}
+.nav-left{display:flex;align-items:center;gap:20px;}
+.nav-logo{
+  display:flex;align-items:center;gap:9px;
+  font-size:14px;font-weight:500;color:var(--t0);
+  letter-spacing:-.2px;
+}
+.logo-mark{
+  width:26px;height:26px;border-radius:7px;
+  background:var(--a5);
+  border:1px solid var(--a4);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.logo-mark::after{
+  content:'';
+  width:10px;height:10px;border-radius:2px;
+  background:var(--a1);
+  display:block;
+}
+.nav-divider{width:1px;height:18px;background:var(--b1);}
+.nav-tabs{display:flex;gap:2px;}
+.nav-tab{
+  padding:5px 12px;border-radius:7px;
+  font-size:12px;color:var(--t2);
+  cursor:pointer;transition:all .15s;
+}
+.nav-tab:hover{background:var(--glass);color:var(--t1);}
+.nav-tab.active{background:var(--glass);color:var(--t0);}
+
+.nav-right{display:flex;align-items:center;gap:14px;}
+.streak-pill{
+  display:flex;align-items:center;gap:7px;
+  padding:5px 11px;border-radius:999px;
+  background:var(--a6);border:1px solid var(--a5);
+  font-size:12px;color:var(--a1);
+}
+.streak-flame{font-size:12px;}
+.nav-notif{
+  width:28px;height:28px;border-radius:8px;
+  background:var(--glass);border:1px solid var(--b0);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;position:relative;
+}
+.notif-dot{
+  position:absolute;top:5px;right:5px;
+  width:5px;height:5px;border-radius:50%;
+  background:var(--a2);
+}
+.avatar{
+  width:28px;height:28px;border-radius:50%;
+  background:linear-gradient(135deg,var(--a5),var(--a4));
+  border:1.5px solid var(--a4);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:500;color:var(--a1);
+  cursor:pointer;
+}
+
+/* ─── BODY LAYOUT ─── */
+.ws-body{
+  display:grid;
+  grid-template-columns:320px 1fr 260px;
+  flex:1;overflow:hidden;
+}
+
+/* ─── LEFT SIDEBAR ─── */
+.sidebar{
+  background:var(--bg1);
+  border-right:1px solid var(--b0);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.sb-top{
+  padding:18px 18px 14px;
+  border-bottom:1px solid var(--b0);
+}
+.sb-eyebrow{
+  font-size:9px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--a3);
+  margin-bottom:4px;
+}
+.sb-title{
+  font-family:var(--serif);
+  font-size:19px;color:var(--t0);
+  line-height:1.25;margin-bottom:13px;
+  font-style:italic;
+}
+.chip-row{display:flex;gap:5px;flex-wrap:wrap;}
+.chip{
+  padding:4px 10px;border-radius:999px;
+  border:1px solid var(--b1);
+  font-size:11px;color:var(--t2);
+  cursor:pointer;background:transparent;
+  transition:all .15s;font-family:var(--sans);
+  white-space:nowrap;
+}
+.chip:hover{border-color:var(--a4);color:var(--a2);}
+.chip.on{background:var(--a6);border-color:var(--a4);color:var(--a1);}
+
+/* transcript */
+.transcript{
+  flex:1;overflow-y:auto;
+  padding:16px;
+  display:flex;flex-direction:column;gap:14px;
+  scrollbar-width:thin;scrollbar-color:var(--bg4) transparent;
+}
+.bubble-row{display:flex;align-items:flex-end;gap:8px;}
+.bubble-row.user{justify-content:flex-end;}
+.bubble-row.ai{justify-content:flex-start;}
+.ai-ava{
+  width:22px;height:22px;border-radius:6px;
+  background:var(--a6);border:1px solid var(--a5);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.ai-ava-dot{width:8px;height:8px;border-radius:2px;background:var(--a2);}
+
+.bbl{
+  max-width:85%;
+  padding:10px 13px;
+  font-size:12.5px;line-height:1.65;
+}
+.bbl.user{
+  border-radius:14px 14px 3px 14px;
+  background:var(--bg3);border:1px solid var(--b1);
+  color:var(--t0);
+}
+.bbl.ai{
+  border-radius:3px 14px 14px 14px;
+  background:var(--a6);border:1px solid var(--a5);
+  color:var(--a0);
+}
+.bbl-meta{
+  margin-top:6px;font-size:10px;
+  color:var(--a4);font-family:var(--mono);
+  display:flex;align-items:center;gap:5px;
+}
+.bbl-meta-dot{width:4px;height:4px;border-radius:50%;background:var(--a4);}
+.sugg-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;}
+.sugg{
+  padding:3px 8px;border-radius:999px;
+  background:transparent;border:1px solid var(--a5);
+  color:var(--a3);font-size:11px;cursor:pointer;
+  font-family:var(--sans);transition:all .15s;
+}
+.sugg:hover{background:var(--a6);color:var(--a1);}
+
+/* typing indicator */
+.typing{
+  display:flex;align-items:center;gap:3px;
+  padding:10px 13px;
+}
+.typing span{
+  width:5px;height:5px;border-radius:50%;
+  background:var(--a3);display:block;
+  animation:bounce .9s infinite;
+}
+.typing span:nth-child(2){animation-delay:.15s;}
+.typing span:nth-child(3){animation-delay:.3s;}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-5px);}}
+
+/* status bar */
+.sb-status{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 18px;border-top:1px solid var(--b0);
+}
+.status-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:999px;
+  background:var(--g0);border:1px solid rgba(141,196,85,.2);
+  font-size:10px;color:var(--g1);
+}
+.status-pulse{
+  width:5px;height:5px;border-radius:50%;
+  background:var(--g1);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(.8);}}
+.sess-id{font-size:10px;color:var(--t3);font-family:var(--mono);}
+
+/* composer */
+.composer{padding:10px 14px;border-top:1px solid var(--b0);}
+.composer-wrap{
+  border:1px solid var(--b1);border-radius:var(--rad-lg);
+  background:var(--bg2);padding:10px 12px;
+  display:flex;flex-direction:column;gap:8px;
+  transition:border-color .2s;
+}
+.composer-wrap:focus-within{border-color:var(--a4);}
+.composer-ta{
+  font-size:12.5px;color:var(--t1);
+  font-family:var(--sans);
+  background:transparent;border:none;outline:none;
+  resize:none;line-height:1.5;width:100%;
+}
+.composer-footer{display:flex;align-items:center;justify-content:space-between;}
+.composer-hint{font-size:10px;color:var(--t3);}
+.composer-actions{display:flex;gap:6px;align-items:center;}
+.composer-btn-ghost{
+  width:26px;height:26px;border-radius:7px;
+  background:transparent;border:1px solid var(--b1);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .15s;
+}
+.composer-btn-ghost:hover{background:var(--glass);border-color:var(--b2);}
+.composer-send{
+  padding:5px 14px;border-radius:8px;
+  background:var(--a3);color:var(--a0);
+  font-size:11px;font-weight:500;border:none;
+  cursor:pointer;font-family:var(--sans);
+  transition:background .15s;
+}
+.composer-send:hover{background:var(--a2);}
+
+/* ─── MAIN ─── */
+main{
+  overflow-y:auto;padding:20px;
+  display:flex;flex-direction:column;gap:16px;
+  scrollbar-width:thin;scrollbar-color:var(--bg4) transparent;
+  background:var(--bg0);
+}
+
+/* hero */
+.hero{
+  border-radius:var(--rad-2xl);
+  background:var(--bg1);
+  border:1px solid var(--b0);
+  padding:24px;
+  position:relative;overflow:hidden;
+}
+.hero::before{
+  content:'';
+  position:absolute;
+  top:-60px;right:-60px;
+  width:220px;height:220px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(196,125,20,.12),transparent 70%);
+  pointer-events:none;
+}
+.hero-eyebrow{
+  font-size:9px;letter-spacing:2.2px;
+  text-transform:uppercase;color:var(--a3);
+  margin-bottom:7px;
+}
+.hero-title{
+  font-family:var(--serif);font-size:30px;
+  color:var(--t0);line-height:1.15;
+  margin-bottom:9px;
+}
+.hero-title em{color:var(--a2);font-style:italic;}
+.hero-copy{
+  font-size:12px;line-height:1.7;
+  color:var(--t2);max-width:440px;
+  margin-bottom:20px;
+}
+.hero-stats{display:flex;gap:10px;flex-wrap:wrap;}
+.hero-stat{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;border-radius:var(--rad-md);
+  background:var(--bg2);border:1px solid var(--b0);
+}
+.hero-stat-val{
+  font-size:20px;font-weight:400;
+  font-family:var(--serif);color:var(--t0);
+  line-height:1;
+}
+.hero-stat-val.amber{color:var(--a2);}
+.hero-stat-body{}
+.hero-stat-label{font-size:10px;color:var(--t2);margin-top:1px;}
+.hero-stat-delta{
+  font-size:10px;color:var(--g1);
+  font-family:var(--mono);
+}
+.hero-tags{
+  position:absolute;top:24px;right:24px;
+  display:flex;gap:6px;
+}
+.hero-tag{
+  padding:4px 9px;border-radius:999px;
+  font-size:10px;border:1px solid var(--b1);
+  color:var(--t2);background:var(--bg2);
+}
+
+/* progress section */
+.prog-row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.prog-card{
+  border-radius:var(--rad-lg);
+  background:var(--bg1);border:1px solid var(--b0);
+  padding:16px;
+}
+.prog-head{
+  display:flex;align-items:center;
+  justify-content:space-between;margin-bottom:14px;
+}
+.prog-title{font-size:11px;letter-spacing:.5px;color:var(--t1);font-weight:500;}
+.prog-num{font-size:11px;color:var(--a3);font-family:var(--mono);}
+.skill-list{display:flex;flex-direction:column;gap:10px;}
+.skill-item{display:flex;flex-direction:column;gap:5px;}
+.skill-row{display:flex;justify-content:space-between;align-items:center;}
+.skill-name{font-size:12px;color:var(--t1);}
+.skill-score{font-size:11px;color:var(--t2);font-family:var(--mono);}
+.skill-bar{height:3px;border-radius:999px;background:var(--bg3);overflow:hidden;}
+.skill-fill{height:100%;border-radius:999px;background:var(--a3);transition:width .4s;}
+
+/* ready packs */
+.pack-list{display:flex;flex-direction:column;gap:6px;}
+.pack-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:var(--rad-md);
+  background:var(--bg2);border:1px solid var(--b0);
+  cursor:pointer;transition:all .15s;
+}
+.pack-item:hover{border-color:var(--b1);background:var(--bg3);}
+.pack-icon{
+  width:28px;height:28px;border-radius:8px;
+  background:var(--a6);border:1px solid var(--a5);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.pack-name{font-size:12px;color:var(--t0);flex:1;}
+.pack-meta{font-size:10px;color:var(--t3);font-family:var(--mono);}
+.pack-diff{
+  padding:2px 7px;border-radius:999px;
+  font-size:10px;
+}
+.pack-diff.easy{background:var(--g0);color:var(--g1);}
+.pack-diff.med{background:var(--a6);color:var(--a2);}
+.pack-diff.hard{background:var(--r0);color:var(--r1);}
+
+/* modules section */
+.modules-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.mod-card{
+  border-radius:var(--rad-lg);
+  border:1px solid var(--b0);
+  background:var(--bg1);
+  padding:18px;
+  cursor:pointer;
+  position:relative;
+  transition:all .18s;
+  overflow:hidden;
+}
+.mod-card::after{
+  content:'';
+  position:absolute;inset:0;
+  border-radius:inherit;
+  opacity:0;
+  transition:opacity .18s;
+  background:var(--glass);
+}
+.mod-card:hover::after{opacity:1;}
+.mod-card:hover{border-color:var(--b1);}
+.mod-card.primary{background:var(--a6);border-color:var(--a4);}
+.mod-card.primary:hover{background:color-mix(in srgb,var(--a6) 85%,var(--a5));}
+.mod-badge{
+  position:absolute;top:12px;right:12px;
+  padding:2px 7px;border-radius:999px;
+  font-size:9px;letter-spacing:.5px;
+  background:var(--a3);color:var(--a0);
+}
+.mod-icon{
+  width:34px;height:34px;border-radius:10px;
+  margin-bottom:12px;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.mod-icon.amber{background:var(--a5);border:1px solid var(--a4);}
+.mod-icon.slate{background:var(--bg3);border:1px solid var(--b1);}
+.mod-icon.green{background:var(--g0);border:1px solid rgba(141,196,85,.25);}
+.mod-title{font-size:13px;font-weight:500;color:var(--t0);margin-bottom:4px;line-height:1.3;}
+.mod-card.primary .mod-title{color:var(--a0);}
+.mod-desc{font-size:11px;color:var(--t2);line-height:1.6;}
+.mod-card.primary .mod-desc{color:var(--a4);}
+.mod-arrow{
+  position:absolute;bottom:14px;right:14px;
+  font-size:13px;color:var(--t3);
+  transition:all .18s;
+}
+.mod-card:hover .mod-arrow{color:var(--t1);transform:translate(2px,-2px);}
+.mod-card.primary .mod-arrow{color:var(--a4);}
+
+/* queue */
+.queue{
+  border-radius:var(--rad-lg);
+  border:1px solid var(--b0);
+  background:var(--bg1);
+  overflow:hidden;
+}
+.queue-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 18px;
+  border-bottom:1px solid var(--b0);
+  transition:background .15s;
+}
+.queue-item:last-child{border-bottom:none;}
+.queue-item:hover{background:var(--glass);}
+.q-num{
+  width:20px;height:20px;border-radius:5px;
+  background:var(--bg3);border:1px solid var(--b1);
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:var(--t2);flex-shrink:0;
+  font-family:var(--mono);
+}
+.q-text{font-size:12px;color:var(--t1);line-height:1.4;flex:1;}
+.q-tag{
+  padding:2px 7px;border-radius:999px;
+  font-size:9px;border:1px solid var(--b1);
+  color:var(--t3);white-space:nowrap;
+}
+
+/* media */
+.media-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.media-card{
+  border-radius:var(--rad-lg);
+  border:1px solid var(--b0);
+  background:var(--bg1);
+  padding:18px;
+}
+.media-title{font-size:13px;font-weight:500;color:var(--t0);margin-bottom:4px;}
+.media-copy{font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:13px;}
+.media-drop{
+  border-radius:var(--rad-md);
+  border:1px dashed var(--b1);
+  background:var(--bg2);
+  height:76px;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:5px;
+}
+.media-drop-txt{font-size:11px;color:var(--t3);}
+.coming{
+  display:inline-flex;margin-top:9px;
+  padding:2px 8px;border-radius:999px;
+  font-size:9px;letter-spacing:1px;
+  text-transform:uppercase;
+  background:var(--bg3);color:var(--t3);
+  border:1px solid var(--b1);
+}
+
+/* ─── RIGHT PANEL ─── */
+.right-panel{
+  border-left:1px solid var(--b0);
+  background:var(--bg1);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.rp-head{
+  padding:18px 16px 14px;
+  border-bottom:1px solid var(--b0);
+}
+.rp-eyebrow{
+  font-size:9px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--t3);
+  margin-bottom:12px;
+}
+.rp-body{
+  flex:1;overflow-y:auto;padding:14px 16px;
+  display:flex;flex-direction:column;gap:14px;
+  scrollbar-width:thin;scrollbar-color:var(--bg4) transparent;
+}
+
+/* achievement card */
+.ach-card{
+  border-radius:var(--rad-md);
+  background:var(--bg2);border:1px solid var(--b0);
+  padding:12px;display:flex;align-items:center;gap:10px;
+}
+.ach-icon{
+  width:32px;height:32px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;font-size:14px;
+}
+.ach-icon.unlocked{background:var(--a6);border:1px solid var(--a5);}
+.ach-icon.locked{background:var(--bg3);border:1px solid var(--b0);opacity:.4;}
+.ach-title{font-size:12px;color:var(--t0);margin-bottom:2px;}
+.ach-desc{font-size:10px;color:var(--t2);line-height:1.4;}
+.ach-badge{
+  margin-left:auto;padding:2px 7px;
+  border-radius:999px;font-size:9px;
+  background:var(--a6);color:var(--a2);
+  border:1px solid var(--a5);
+  white-space:nowrap;flex-shrink:0;
+}
+
+/* mini calendar / recent */
+.recent-head{
+  font-size:10px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--t3);
+  margin-bottom:10px;
+}
+.calendar-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  gap:3px;text-align:center;
+}
+.cal-day-label{font-size:9px;color:var(--t3);}
+.cal-day{
+  width:100%;aspect-ratio:1;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:var(--t2);
+}
+.cal-day.done{background:var(--a5);color:var(--a2);}
+.cal-day.today{background:var(--a3);color:var(--a0);}
+.cal-day.missed{background:var(--bg3);color:var(--t3);opacity:.5;}
+
+/* section label */
+.sec-head{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:10px;
+}
+.sec-label{
+  font-size:9px;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--t3);
+}
+.sec-action{font-size:11px;color:var(--a3);cursor:pointer;}
+.sec-action:hover{color:var(--a2);}
+
+/* SVG icons */
+.icon-img{width:16px;height:16px;stroke:var(--a2);stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.icon-sm{width:13px;height:13px;stroke:var(--t2);stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.icon-audio{width:13px;height:13px;stroke:var(--g1);stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.icon-pack{width:13px;height:13px;stroke:var(--a2);stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+
+/* waveform animation */
+.wave{display:flex;gap:2px;align-items:center;height:18px;}
+.wave span{
+  width:2px;border-radius:1px;
+  background:var(--t3);display:block;
+  animation:wave 1.4s ease-in-out infinite;
+}
+.wave span:nth-child(1){height:4px;animation-delay:0s;}
+.wave span:nth-child(2){height:10px;animation-delay:.1s;}
+.wave span:nth-child(3){height:6px;animation-delay:.2s;}
+.wave span:nth-child(4){height:14px;animation-delay:.3s;}
+.wave span:nth-child(5){height:8px;animation-delay:.4s;}
+.wave span:nth-child(6){height:12px;animation-delay:.5s;}
+.wave span:nth-child(7){height:5px;animation-delay:.6s;}
+@keyframes wave{0%,100%{transform:scaleY(1);}50%{transform:scaleY(1.6);}}
+
+/* fade-in animation on load */
+.fade-in{animation:fadeUp .4s ease both;}
+.fade-in:nth-child(1){animation-delay:.05s;}
+.fade-in:nth-child(2){animation-delay:.1s;}
+.fade-in:nth-child(3){animation-delay:.15s;}
+.fade-in:nth-child(4){animation-delay:.2s;}
+.fade-in:nth-child(5){animation-delay:.25s;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-left">
+    <div class="nav-logo">
+      <div class="logo-mark"></div>
+      StudyOS
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-tabs">
+      <div class="nav-tab active">학습 공간</div>
+      <div class="nav-tab">분석</div>
+      <div class="nav-tab">Ready Pack</div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="streak-pill">
+      <span class="streak-flame">🔥</span>
+      12일 연속
+    </div>
+    <div class="nav-notif">
+      <svg class="icon-sm" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <div class="notif-dot"></div>
+    </div>
+    <div class="avatar">JS</div>
+  </div>
+</nav>
+
+<div class="ws-body">
+
+  <!-- ═══ LEFT: CHAT ═══ -->
+  <aside>
+    <div class="sb-top">
+      <div class="sb-eyebrow">AI 튜터</div>
+      <div class="sb-title">오늘 무엇을<br>연습할까요?</div>
+      <div class="chip-row">
+        <button class="chip on">TOEIC Part 5</button>
+        <button class="chip">문장 교정</button>
+        <button class="chip">워밍업</button>
+        <button class="chip">어휘</button>
+      </div>
+    </div>
+
+    <div class="transcript">
+
+      <div class="bubble-row ai">
+        <div class="ai-ava"><div class="ai-ava-dot"></div></div>
+        <div class="bbl ai">
+          안녕하세요! TOEIC Part 5, 문장 교정, 워밍업 중 어떤 것부터 시작할까요?
+          <div class="bbl-meta">
+            <div class="bbl-meta-dot"></div>
+            intent: chat
+          </div>
+          <div class="sugg-row">
+            <button class="sugg">Part 5 풀기</button>
+            <button class="sugg">문장 교정</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bubble-row user">
+        <div class="bbl user">TOEIC Part 5 팁 하나 짧게 알려줘.</div>
+      </div>
+
+      <div class="bubble-row ai">
+        <div class="ai-ava"><div class="ai-ava-dot"></div></div>
+        <div class="bbl ai">
+          <span style="color:var(--a1);font-weight:500;">품사부터 확인하세요.</span><br>
+          빈칸 앞뒤 단어로 명사·동사·형용사·부사 중 어느 품사가 필요한지 먼저 파악하면 오답을 빠르게 제거할 수 있어요.
+          <div class="bbl-meta">
+            <div class="bbl-meta-dot"></div>
+            intent: chat &nbsp;·&nbsp; 메모리 저장됨
+          </div>
+          <div class="sugg-row">
+            <button class="sugg">예제 문제</button>
+            <button class="sugg">다음 팁</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bubble-row user">
+        <div class="bbl user">예제 문제 하나 내줘.</div>
+      </div>
+
+      <div class="bubble-row ai">
+        <div class="ai-ava"><div class="ai-ava-dot"></div></div>
+        <div class="bbl ai">
+          The manager's _____ to finish the report by Friday was commendable.<br><br>
+          <span style="color:var(--a3);">(A)</span> decide &nbsp;
+          <span style="color:var(--a3);">(B)</span> decisive &nbsp;
+          <span style="color:var(--a3);">(C)</span> decision &nbsp;
+          <span style="color:var(--a3);">(D)</span> decided<br><br>
+          어떤 답이라고 생각하세요?
+          <div class="bbl-meta">
+            <div class="bbl-meta-dot"></div>
+            intent: quiz_request
+          </div>
+        </div>
+      </div>
+
+      <div class="bubble-row ai">
+        <div class="ai-ava"><div class="ai-ava-dot"></div></div>
+        <div class="bbl ai" style="padding:10px 14px;">
+          <div class="typing">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="sb-status">
+      <div class="status-pill">
+        <div class="status-pulse"></div>
+        연결됨
+      </div>
+      <div class="sess-id">sess:a3f9e2</div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-wrap">
+        <textarea class="composer-ta" rows="2" placeholder="메시지를 입력하거나 예문에 답해보세요…"></textarea>
+        <div class="composer-footer">
+          <span class="composer-hint">⌘↵ 전송</span>
+          <div class="composer-actions">
+            <div class="composer-btn-ghost">
+              <svg class="icon-sm" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+            </div>
+            <button class="composer-send">전송</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ CENTER: MAIN ═══ -->
+  <main>
+
+    <!-- Hero -->
+    <div class="hero fade-in">
+      <div class="hero-tags">
+        <div class="hero-tag">TOEIC 준비중</div>
+        <div class="hero-tag">LC · RC</div>
+      </div>
+      <div class="hero-eyebrow">Learner Workspace</div>
+      <div class="hero-title">집중 <em>학습 플로우</em></div>
+      <div class="hero-copy">튜터 채팅, 문제 풀기, 설명 확인까지 한 화면에서 끊김 없이 이어지는 학습 경험.</div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-val amber">87</div>
+          <div class="hero-stat-body">
+            <div class="hero-stat-label">평균 점수</div>
+            <div class="hero-stat-delta">+3.2 이번 주</div>
+          </div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val">24</div>
+          <div class="hero-stat-body">
+            <div class="hero-stat-label">퀴즈 완료</div>
+            <div class="hero-stat-delta" style="color:var(--t3);">이번 달</div>
+          </div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val">142</div>
+          <div class="hero-stat-body">
+            <div class="hero-stat-label">학습 메모리</div>
+            <div class="hero-stat-delta">+12 오늘</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress + Packs -->
+    <div class="prog-row fade-in">
+      <div class="prog-card">
+        <div class="prog-head">
+          <div class="prog-title">스킬 현황</div>
+          <div class="prog-num">이번 주 기준</div>
+        </div>
+        <div class="skill-list">
+          <div class="skill-item">
+            <div class="skill-row">
+              <div class="skill-name">Part 5 문법</div>
+              <div class="skill-score">82%</div>
+            </div>
+            <div class="skill-bar"><div class="skill-fill" style="width:82%;"></div></div>
+          </div>
+          <div class="skill-item">
+            <div class="skill-row">
+              <div class="skill-name">어휘</div>
+              <div class="skill-score">74%</div>
+            </div>
+            <div class="skill-bar"><div class="skill-fill" style="width:74%;background:var(--a2);"></div></div>
+          </div>
+          <div class="skill-item">
+            <div class="skill-row">
+              <div class="skill-name">작문 교정</div>
+              <div class="skill-score">68%</div>
+            </div>
+            <div class="skill-bar"><div class="skill-fill" style="width:68%;background:var(--g1);"></div></div>
+          </div>
+          <div class="skill-item">
+            <div class="skill-row">
+              <div class="skill-name">독해 속도</div>
+              <div class="skill-score">91%</div>
+            </div>
+            <div class="skill-bar"><div class="skill-fill" style="width:91%;background:var(--a1);"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="prog-card">
+        <div class="prog-head">
+          <div class="prog-title">Ready Pack</div>
+          <div class="prog-num">5개 준비됨</div>
+        </div>
+        <div class="pack-list">
+          <div class="pack-item">
+            <div class="pack-icon">
+              <svg class="icon-pack" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            </div>
+            <div>
+              <div class="pack-name">Part 5 핵심 문법 40선</div>
+              <div class="pack-meta">40문항 · 30분</div>
+            </div>
+            <div class="pack-diff easy">쉬움</div>
+          </div>
+          <div class="pack-item">
+            <div class="pack-icon">
+              <svg class="icon-pack" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            </div>
+            <div>
+              <div class="pack-name">비즈니스 어휘 실전편</div>
+              <div class="pack-meta">60문항 · 45분</div>
+            </div>
+            <div class="pack-diff med">보통</div>
+          </div>
+          <div class="pack-item">
+            <div class="pack-icon">
+              <svg class="icon-pack" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            </div>
+            <div>
+              <div class="pack-name">RC 고난도 모의고사</div>
+              <div class="pack-meta">100문항 · 75분</div>
+            </div>
+            <div class="pack-diff hard">어려움</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modules -->
+    <div class="fade-in">
+      <div class="sec-head">
+        <div class="sec-label">연습 모듈</div>
+        <div class="sec-action">전체 →</div>
+      </div>
+      <div class="modules-grid">
+        <div class="mod-card primary">
+          <div class="mod-badge">추천</div>
+          <div class="mod-icon amber">
+            <svg class="icon-img" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <div class="mod-title">다음 학습 과제</div>
+          <div class="mod-desc">튜터에게 맞춤형 TOEIC 문제 또는 학습 태스크를 요청합니다.</div>
+          <div class="mod-arrow">↗</div>
+        </div>
+        <div class="mod-card">
+          <div class="mod-icon slate">
+            <svg class="icon-img" style="stroke:var(--t2);" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </div>
+          <div class="mod-title">작문 교정</div>
+          <div class="mod-desc">문장을 입력하고 즉각적인 교정과 상세 설명을 받아보세요.</div>
+          <div class="mod-arrow">↗</div>
+        </div>
+        <div class="mod-card">
+          <div class="mod-icon green">
+            <svg class="icon-img" style="stroke:var(--g1);" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </div>
+          <div class="mod-title">Ready Pack 실행</div>
+          <div class="mod-desc">저장된 퀴즈 팩으로 집중 모드 학습을 시작합니다.</div>
+          <div class="mod-arrow">↗</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue -->
+    <div class="fade-in">
+      <div class="sec-head">
+        <div class="sec-label">개발 예정 모듈</div>
+      </div>
+      <div class="queue">
+        <div class="queue-item">
+          <div class="q-num">01</div>
+          <div class="q-text">단일 TOEIC 문제 플로우 — 제출 즉시 해설 표시 및 적응형 후속 문제</div>
+          <div class="q-tag">예정</div>
+        </div>
+        <div class="queue-item">
+          <div class="q-num">02</div>
+          <div class="q-text">작문 교정 워크스페이스 — 첨삭 및 재작성 보조 도구</div>
+          <div class="q-tag">예정</div>
+        </div>
+        <div class="queue-item">
+          <div class="q-num">03</div>
+          <div class="q-text">성찰 및 추천 패널 — 학습 후 요약과 다음 단계 추천</div>
+          <div class="q-tag">예정</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Media -->
+    <div class="fade-in">
+      <div class="sec-head">
+        <div class="sec-label">멀티미디어 학습</div>
+      </div>
+      <div class="media-grid">
+        <div class="media-card">
+          <div class="media-title">이미지 기반 학습</div>
+          <div class="media-copy">이미지 업로드 → 어휘 추출 → 멀티모달 분석 → 이미지 기반 퀴즈 생성.</div>
+          <div class="media-drop">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <div class="media-drop-txt">이미지 드롭 또는 클릭</div>
+          </div>
+          <div class="coming">Coming soon</div>
+        </div>
+        <div class="media-card">
+          <div class="media-title">오디오 연습</div>
+          <div class="media-copy">STT · TTS 재생 · 쉐도잉 연습 · 발음 채점 기능 제공 예정.</div>
+          <div class="media-drop">
+            <div class="wave">
+              <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="media-drop-txt">오디오 세션 준비 중</div>
+          </div>
+          <div class="coming">Coming soon</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══ RIGHT PANEL ═══ -->
+  <div class="right-panel">
+    <div class="rp-head">
+      <div class="rp-eyebrow">학습 현황</div>
+      <div style="margin-bottom:10px;">
+        <div class="recent-head" style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);margin-bottom:8px;">4월 출석</div>
+        <div class="calendar-grid">
+          <div class="cal-day-label">월</div>
+          <div class="cal-day-label">화</div>
+          <div class="cal-day-label">수</div>
+          <div class="cal-day-label">목</div>
+          <div class="cal-day-label">금</div>
+          <div class="cal-day-label">토</div>
+          <div class="cal-day-label">일</div>
+          <div class="cal-day done">1</div>
+          <div class="cal-day done">2</div>
+          <div class="cal-day done">3</div>
+          <div class="cal-day done">4</div>
+          <div class="cal-day done">5</div>
+          <div class="cal-day missed">6</div>
+          <div class="cal-day done">7</div>
+          <div class="cal-day done">8</div>
+          <div class="cal-day done">9</div>
+          <div class="cal-day done">10</div>
+          <div class="cal-day done">11</div>
+          <div class="cal-day done">12</div>
+          <div class="cal-day today">13</div>
+          <div class="cal-day">14</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rp-body">
+      <div>
+        <div class="recent-head">업적</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div class="ach-card">
+            <div class="ach-icon unlocked">🏆</div>
+            <div>
+              <div class="ach-title">10일 연속 학습</div>
+              <div class="ach-desc">꾸준한 학습 습관 형성</div>
+            </div>
+            <div class="ach-badge">달성</div>
+          </div>
+          <div class="ach-card">
+            <div class="ach-icon unlocked">⚡</div>
+            <div>
+              <div class="ach-title">빠른 학습자</div>
+              <div class="ach-desc">퀴즈 20개 완료</div>
+            </div>
+            <div class="ach-badge">달성</div>
+          </div>
+          <div class="ach-card">
+            <div class="ach-icon locked">🎯</div>
+            <div>
+              <div class="ach-title">90점 돌파</div>
+              <div class="ach-desc">평균 점수 90점 이상 달성</div>
+            </div>
+          </div>
+          <div class="ach-card">
+            <div class="ach-icon locked">📚</div>
+            <div>
+              <div class="ach-title">메모리 마스터</div>
+              <div class="ach-desc">학습 메모리 200개 저장</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="recent-head">최근 활동</div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--b0);">
+            <div style="width:5px;height:5px;border-radius:50%;background:var(--a3);flex-shrink:0;"></div>
+            <div style="font-size:11px;color:var(--t1);flex:1;">Part 5 품사 구분 퀴즈 완료</div>
+            <div style="font-size:10px;color:var(--t3);font-family:var(--mono);">방금</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--b0);">
+            <div style="width:5px;height:5px;border-radius:50%;background:var(--g1);flex-shrink:0;"></div>
+            <div style="font-size:11px;color:var(--t1);flex:1;">메모리 12개 저장됨</div>
+            <div style="font-size:10px;color:var(--t3);font-family:var(--mono);">오늘</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--b0);">
+            <div style="width:5px;height:5px;border-radius:50%;background:var(--t3);flex-shrink:0;"></div>
+            <div style="font-size:11px;color:var(--t1);flex:1;">비즈니스 어휘 팩 생성</div>
+            <div style="font-size:10px;color:var(--t3);font-family:var(--mono);">어제</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 0;">
+            <div style="width:5px;height:5px;border-radius:50%;background:var(--t3);flex-shrink:0;"></div>
+            <div style="font-size:11px;color:var(--t1);flex:1;">RC 모의고사 87점 달성</div>
+            <div style="font-size:10px;color:var(--t3);font-family:var(--mono);">2일 전</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.querySelectorAll('.chip').forEach(c=>{
+  c.addEventListener('click',()=>{
+    c.closest('.chip-row').querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');
+  });
+});
+document.querySelectorAll('.nav-tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    t.closest('.nav-tabs').querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+  });
+});
+document.querySelectorAll('.sugg').forEach(s=>{
+  s.addEventListener('click',()=>{
+    document.querySelector('.composer-ta').value = s.textContent;
+    document.querySelector('.composer-ta').focus();
+  });
+});
+</script>
+</body>
+</html>
