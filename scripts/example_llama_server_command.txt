@@ -1,0 +1,5 @@
+# Example text-only local server
+llama-server -m /path/to/model.gguf --port 8080
+
+# Example multimodal local server (text + vision)
+llama-server -m /path/to/model.gguf --mmproj /path/to/mmproj.gguf --port 8080

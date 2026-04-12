@@ -1,0 +1,12 @@
+case_id: quiz_generation
+route: quiz_generate
+payload:
+  user_id: demo_user
+  topic: "be verb vs general verb"
+  mode: grammar
+  difficulty: easy
+  count: 3
+expect_keys:
+  - quiz_id
+  - pack
+max_latency_ms: 30000

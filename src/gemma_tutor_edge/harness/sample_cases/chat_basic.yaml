@@ -1,0 +1,10 @@
+case_id: chat_basic
+route: chat
+payload:
+  user_id: demo_user
+  message: "I studied TOEIC reading yesterday. Please encourage me and suggest the next step."
+expect_keys:
+  - session_id
+  - run_id
+  - output
+max_latency_ms: 30000
