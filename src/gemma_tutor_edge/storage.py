@@ -16,6 +16,7 @@ from .schemas import (
     QuizPack,
     ReadyQuizSummary,
     SkillSnapshot,
+    ToeicPracticeItem,
 )
 
 
@@ -111,6 +112,23 @@ class SqliteStore:
                     description TEXT NOT NULL,
                     unlocked INTEGER NOT NULL,
                     unlocked_at TEXT NULL
+                )
+                """
+            )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS toeic_attempts (
+                    attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    item_id TEXT NOT NULL,
+                    part_type TEXT NOT NULL,
+                    difficulty_level TEXT NOT NULL,
+                    grammar_tag TEXT NOT NULL,
+                    vocab_tag TEXT NULL,
+                    selected_option TEXT NOT NULL,
+                    correct INTEGER NOT NULL,
+                    response_time_ms INTEGER NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
@@ -282,6 +300,67 @@ class SqliteStore:
                 (user_id, quiz_id, total, correct, score, json.dumps(feedback)),
             )
             await db.commit()
+
+    async def save_toeic_attempt(
+        self,
+        *,
+        user_id: str,
+        item: ToeicPracticeItem,
+        selected_option: str,
+        correct: bool,
+        response_time_ms: int,
+    ) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO toeic_attempts(
+                    user_id, item_id, part_type, difficulty_level, grammar_tag, vocab_tag,
+                    selected_option, correct, response_time_ms
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    item.item_id,
+                    item.part_type,
+                    item.difficulty_level,
+                    item.grammar_tag,
+                    item.vocab_tag,
+                    selected_option,
+                    int(correct),
+                    response_time_ms,
+                ),
+            )
+            await db.commit()
+
+    async def list_recent_toeic_attempts(self, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT item_id, part_type, difficulty_level, grammar_tag, vocab_tag, selected_option, correct,
+                       response_time_ms, created_at
+                FROM toeic_attempts
+                WHERE user_id = ?
+                ORDER BY created_at DESC, attempt_id DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            )
+            rows = await cursor.fetchall()
+        return [
+            {
+                "item_id": row[0],
+                "part_type": row[1],
+                "difficulty_level": row[2],
+                "grammar_tag": row[3],
+                "vocab_tag": row[4],
+                "selected_option": row[5],
+                "correct": bool(row[6]),
+                "response_time_ms": row[7],
+                "created_at": row[8],
+            }
+            for row in rows
+        ]
 
     async def queue_job(self, job: BackgroundJob) -> None:
         async with aiosqlite.connect(self.db_path) as db:

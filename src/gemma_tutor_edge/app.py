@@ -11,14 +11,18 @@ from .schemas import (
     ChatRequest,
     HealthResponse,
     QueueJobRequest,
+    ToeicAnswerRequest,
+    ToeicNextRequest,
     QuizGenerateRequest,
     QuizSubmitRequest,
 )
 from .services import (
     analyze_image,
     generate_quiz,
+    get_toeic_next_item,
     handle_chat,
     queue_background_job,
+    submit_toeic_answer,
     submit_quiz,
 )
 from .storage import SqliteStore
@@ -74,6 +78,24 @@ async def quiz_generate(request: QuizGenerateRequest):
 async def quiz_submit(request: QuizSubmitRequest):
     try:
         return await submit_quiz(store=store, request=request)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/v1/quiz/next")
+async def quiz_next(request: ToeicNextRequest):
+    try:
+        return await get_toeic_next_item(store=store, request=request)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/v1/quiz/answer")
+async def quiz_answer(request: ToeicAnswerRequest):
+    try:
+        return await submit_toeic_answer(store=store, request=request)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001

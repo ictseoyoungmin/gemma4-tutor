@@ -15,7 +15,7 @@ export function LearnerWorkspace({ userId }: { userId: string }) {
           <TutorChatPanel userId={userId} />
         </aside>
 
-        <WorkspaceMain />
+        <WorkspaceMain userId={userId} />
         <WorkspaceRightRail />
       </div>
     </div>

@@ -83,6 +83,52 @@ class QuizSubmitResponse(BaseModel):
     score: float
 
 
+class ToeicPracticeItem(BaseModel):
+    item_id: str
+    part_type: Literal["part5"]
+    difficulty_level: Literal["easy", "medium", "hard"]
+    question_text: str
+    prompt: str
+    options: list[str] = Field(min_length=4, max_length=4)
+    correct_option: str
+    explanation: str
+    grammar_tag: str
+    vocab_tag: str | None = None
+    validated: bool = True
+    validation_score: float = 1.0
+
+
+class ToeicNextRequest(BaseModel):
+    user_id: str
+    part_type: Literal["part5"] = "part5"
+
+
+class ToeicNextResponse(BaseModel):
+    item: ToeicPracticeItem
+    recommended_difficulty: Literal["easy", "medium", "hard"]
+    weak_tags: list[str] = Field(default_factory=list)
+    recent_accuracy: float = 0.0
+
+
+class ToeicAnswerRequest(BaseModel):
+    user_id: str
+    item_id: str
+    selected_option: str
+    response_time_ms: int = Field(default=0, ge=0)
+
+
+class ToeicAnswerResponse(BaseModel):
+    item_id: str
+    correct: bool
+    correct_option: str
+    explanation: str
+    grammar_tag: str
+    vocab_tag: str | None = None
+    weak_tags: list[str] = Field(default_factory=list)
+    recommended_difficulty: Literal["easy", "medium", "hard"]
+    recent_accuracy: float = 0.0
+
+
 class ImageAnalysisResponse(BaseModel):
     scene_summary: str
     vocabulary: list[str] = Field(default_factory=list)

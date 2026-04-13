@@ -15,8 +15,13 @@ from .schemas import (
     QuizGenerateResponse,
     QuizSubmitRequest,
     QuizSubmitResponse,
+    ToeicAnswerRequest,
+    ToeicAnswerResponse,
+    ToeicNextRequest,
+    ToeicNextResponse,
 )
 from .storage import SqliteStore
+from .toeic import get_item_by_id, select_next_item
 
 
 async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> ChatResponse:
@@ -73,6 +78,51 @@ async def submit_quiz(*, store: SqliteStore, request: QuizSubmitRequest) -> Quiz
         correct=correct,
         feedback=feedback,
         score=score,
+    )
+
+
+async def get_toeic_next_item(*, store: SqliteStore, request: ToeicNextRequest) -> ToeicNextResponse:
+    attempts = await store.list_recent_toeic_attempts(request.user_id, limit=10)
+    item, recommended_difficulty, weak_tags, recent_accuracy = select_next_item(
+        attempts=attempts,
+        part_type=request.part_type,
+    )
+    return ToeicNextResponse(
+        item=item,
+        recommended_difficulty=recommended_difficulty,
+        weak_tags=weak_tags,
+        recent_accuracy=recent_accuracy,
+    )
+
+
+async def submit_toeic_answer(*, store: SqliteStore, request: ToeicAnswerRequest) -> ToeicAnswerResponse:
+    item = get_item_by_id(request.item_id)
+    if item is None:
+        raise ValueError(f"TOEIC item {request.item_id} was not found")
+
+    correct = request.selected_option.strip().lower() == item.correct_option.strip().lower()
+    await store.save_toeic_attempt(
+        user_id=request.user_id,
+        item=item,
+        selected_option=request.selected_option,
+        correct=correct,
+        response_time_ms=request.response_time_ms,
+    )
+    attempts = await store.list_recent_toeic_attempts(request.user_id, limit=10)
+    next_item, recommended_difficulty, weak_tags, recent_accuracy = select_next_item(
+        attempts=attempts,
+        part_type=item.part_type,
+    )
+    return ToeicAnswerResponse(
+        item_id=request.item_id,
+        correct=correct,
+        correct_option=item.correct_option,
+        explanation=item.explanation,
+        grammar_tag=item.grammar_tag,
+        vocab_tag=item.vocab_tag,
+        weak_tags=weak_tags,
+        recommended_difficulty=next_item.difficulty_level if correct else recommended_difficulty,
+        recent_accuracy=recent_accuracy,
     )
 
 

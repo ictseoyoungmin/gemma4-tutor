@@ -203,6 +203,37 @@ Verified:
 
 - frontend production build still succeeds after the refactor.
 
+### 12. TOEIC single-item follow-up
+
+Implemented the next follow-up slice from the recommended order:
+
+- added a seed-backed TOEIC Part 5 single-item flow,
+- added `POST /v1/quiz/next` for deterministic item selection,
+- added `POST /v1/quiz/answer` for immediate grading and explanation,
+- stored TOEIC attempt history including selected option and response time,
+- added a learner-workspace practice panel wired to the real backend flow,
+- changed tutor suggested-action chips to send immediately instead of only filling the draft field.
+
+Added or updated:
+
+- `src/gemma_tutor_edge/schemas.py`
+- `src/gemma_tutor_edge/services.py`
+- `src/gemma_tutor_edge/storage.py`
+- `src/gemma_tutor_edge/app.py`
+- `src/gemma_tutor_edge/toeic.py`
+- `tests/test_toeic_flow.py`
+- `web/src/api.ts`
+- `web/src/types.ts`
+- `web/src/components/workspace/PracticePanel.tsx`
+- `web/src/components/workspace/WorkspaceMain.tsx`
+- `web/src/components/workspace/TutorChatPanel.tsx`
+- `web/src/components/workspace/workspace.css`
+
+Verified:
+
+- backend tests pass: `8 passed`
+- frontend production build succeeds with the new practice panel
+
 ## Current State
 
 The project can now be described like this:
@@ -213,14 +244,12 @@ The project can now be described like this:
 - The frontend is no longer dashboard-only.
 - Learner Workspace exists and can call the real tutor chat route.
 - Learner Workspace now visually follows the v2 reference structure much more closely and is split into smaller maintainable files.
+- Learner Workspace now includes a real TOEIC Part 5 single-item practice panel with immediate answer feedback.
 
 ## Remaining Work
 
 ### High priority product work
 
-- Implement the TOEIC single-item learner loop instead of only generic tutor chat.
-- Add `POST /quiz/next`-style learner flow or equivalent service route.
-- Connect answer submission and immediate explanation UI inside Learner Workspace.
 - Show ready quiz packs as launchable study actions rather than only dashboard summaries.
 
 ### Backend domain work

@@ -1,4 +1,4 @@
-import type { ChatResponse, DashboardDetail } from "./types";
+import type { ChatResponse, DashboardDetail, ToeicAnswerResponse, ToeicNextResponse } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -43,6 +43,45 @@ export async function sendChatMessage(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`Failed to send chat message: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function fetchNextToeicItem(userId: string): Promise<ToeicNextResponse> {
+  const response = await fetch(`${API_BASE}/v1/quiz/next`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      part_type: "part5",
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to fetch TOEIC item: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function submitToeicAnswer(
+  userId: string,
+  itemId: string,
+  selectedOption: string,
+  responseTimeMs: number,
+): Promise<ToeicAnswerResponse> {
+  const response = await fetch(`${API_BASE}/v1/quiz/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      item_id: itemId,
+      selected_option: selectedOption,
+      response_time_ms: responseTimeMs,
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to submit TOEIC answer: ${response.status} ${detail}`);
   }
   return response.json();
 }

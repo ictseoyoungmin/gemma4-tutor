@@ -6,6 +6,7 @@ import {
   readyPacks,
   skillProgress,
 } from "./workspaceData";
+import { PracticePanel } from "./PracticePanel";
 
 function PackIcon() {
   return (
@@ -73,7 +74,7 @@ function MediaAudioPlaceholder() {
   );
 }
 
-export function WorkspaceMain() {
+export function WorkspaceMain({ userId }: { userId: string }) {
   return (
     <main className="workspace-main">
       <section className="workspace-hero workspace-fade-in">
@@ -105,6 +106,8 @@ export function WorkspaceMain() {
           ))}
         </div>
       </section>
+
+      <PracticePanel userId={userId} />
 
       <section className="workspace-progress-row workspace-fade-in">
         <article className="workspace-panel">

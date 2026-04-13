@@ -41,7 +41,7 @@ export const practiceModules = [
 ];
 
 export const queueItems = [
-  "단일 TOEIC 문제 플로우 — 제출 즉시 해설 표시 및 적응형 후속 문제",
+  "Ready Pack 런처 — 대시보드에서 준비된 팩을 학습 화면으로 즉시 실행",
   "작문 교정 워크스페이스 — 첨삭 및 재작성 보조 도구",
   "성찰 및 추천 패널 — 학습 후 요약과 다음 단계 추천",
 ];

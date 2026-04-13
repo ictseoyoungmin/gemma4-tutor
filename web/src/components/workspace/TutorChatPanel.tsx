@@ -156,7 +156,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                       key={suggestion}
                       type="button"
                       className="workspace-suggestion"
-                      onClick={() => setDraft(suggestion)}
+                      onClick={() => void handleSubmit(suggestion)}
                     >
                       {suggestion}
                     </button>

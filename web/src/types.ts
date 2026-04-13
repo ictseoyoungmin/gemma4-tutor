@@ -68,3 +68,37 @@ export type ChatResponse = {
   output: TutorResponse;
   usage: Record<string, unknown>;
 };
+
+export type ToeicPracticeItem = {
+  item_id: string;
+  part_type: "part5";
+  difficulty_level: "easy" | "medium" | "hard";
+  question_text: string;
+  prompt: string;
+  options: string[];
+  correct_option: string;
+  explanation: string;
+  grammar_tag: string;
+  vocab_tag?: string | null;
+  validated: boolean;
+  validation_score: number;
+};
+
+export type ToeicNextResponse = {
+  item: ToeicPracticeItem;
+  recommended_difficulty: "easy" | "medium" | "hard";
+  weak_tags: string[];
+  recent_accuracy: number;
+};
+
+export type ToeicAnswerResponse = {
+  item_id: string;
+  correct: boolean;
+  correct_option: string;
+  explanation: string;
+  grammar_tag: string;
+  vocab_tag?: string | null;
+  weak_tags: string[];
+  recommended_difficulty: "easy" | "medium" | "hard";
+  recent_accuracy: number;
+};
