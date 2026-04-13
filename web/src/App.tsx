@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchDashboardDetail, queuePrebuildJob } from "./api";
+import { fetchDashboardDetail, fetchWorkerStatus, queuePrebuildJob, startWorker, stopWorker } from "./api";
 import { LearnerWorkspace } from "./components/LearnerWorkspace";
 import { SectionCard } from "./components/SectionCard";
 import { StatCard } from "./components/StatCard";
-import type { DashboardDetail } from "./types";
+import type { DashboardDetail, WorkerStatusResponse } from "./types";
 
 const defaultUserId = "demo-user";
 type FrontendView = "dashboard" | "workspace";
@@ -11,11 +11,13 @@ type FrontendView = "dashboard" | "workspace";
 export default function App() {
   const [userId, setUserId] = useState(defaultUserId);
   const [detail, setDetail] = useState<DashboardDetail | null>(null);
+  const [workerStatus, setWorkerStatus] = useState<WorkerStatusResponse | null>(null);
   const [status, setStatus] = useState("Loading dashboard...");
   const [view, setView] = useState<FrontendView>("dashboard");
 
   useEffect(() => {
     void loadDashboard(userId);
+    void loadWorkerStatus();
   }, [userId]);
 
   async function loadDashboard(targetUserId: string) {
@@ -29,11 +31,43 @@ export default function App() {
     }
   }
 
+  async function loadWorkerStatus() {
+    try {
+      const current = await fetchWorkerStatus();
+      setWorkerStatus(current);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unknown error");
+    }
+  }
+
   async function handleQueueJob() {
     try {
       setStatus("Queueing background job...");
       await queuePrebuildJob(userId, "Daily commuting expressions");
       await loadDashboard(userId);
+      await loadWorkerStatus();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unknown error");
+    }
+  }
+
+  async function handleStartWorker() {
+    try {
+      setStatus("Starting worker...");
+      const current = await startWorker(1);
+      setWorkerStatus(current);
+      setStatus("Worker running");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unknown error");
+    }
+  }
+
+  async function handleStopWorker() {
+    try {
+      setStatus("Stopping worker...");
+      const current = await stopWorker();
+      setWorkerStatus(current);
+      setStatus("Worker stopped");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unknown error");
     }
@@ -152,6 +186,20 @@ export default function App() {
       </div>
 
       <div style={twoColGridStyle}>
+        <SectionCard title="Worker Control">
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+            <button onClick={() => void handleStartWorker()} style={primaryButtonStyle}>Start Worker</button>
+            <button onClick={() => void handleStopWorker()} style={secondaryButtonStyle}>Stop Worker</button>
+            <button onClick={() => void loadWorkerStatus()} style={secondaryButtonStyle}>Refresh Status</button>
+          </div>
+          <ul style={listStyle}>
+            <li>State: {workerStatus?.state ?? "unknown"}</li>
+            <li>PID: {workerStatus?.pid ?? "-"}</li>
+            <li>Poll interval: {workerStatus?.poll_interval ?? "-"}</li>
+            <li>Last exit code: {workerStatus?.last_exit_code ?? "-"}</li>
+          </ul>
+        </SectionCard>
+
         <SectionCard title="Achievements">
           <ul style={listStyle}>
             {detail?.achievements.map((achievement) => (

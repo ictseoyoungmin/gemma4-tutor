@@ -145,8 +145,12 @@ It is designed for competition demos and currently renders:
 
 ### Background worker
 A polling worker is included at `src/gemma_tutor_edge/worker.py`.
-It consumes queued jobs from SQLite and currently supports a deterministic placeholder path for `prebuild_quiz`.
-This makes the architecture visible before the full agentic background generation is wired in.
+It consumes queued jobs from SQLite and now supports:
+- seed-backed ready-pack generation
+- validation plus fallback behavior for prebuild flows
+- dashboard worker control via start/stop/status API endpoints
+
+The dashboard can queue jobs and inspect or control the worker process without launching it manually in a separate terminal.
 
 ### Placeholder modules intentionally left for expansion
 - TTS/STT pipeline

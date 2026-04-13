@@ -282,6 +282,32 @@ Verified:
 - backend tests still pass: `8 passed`
 - frontend production build still succeeds
 
+### 15. Worker control follow-up
+
+Added dashboard-side worker controls and real subprocess verification coverage.
+
+Implemented:
+
+- backend worker controller for start, stop, and status,
+- dashboard UI controls for worker lifecycle,
+- subprocess-based test coverage that starts the worker, processes a queued job, and verifies safe repeated stop behavior.
+
+Added or updated:
+
+- `src/gemma_tutor_edge/worker_control.py`
+- `src/gemma_tutor_edge/app.py`
+- `src/gemma_tutor_edge/schemas.py`
+- `web/src/App.tsx`
+- `web/src/api.ts`
+- `web/src/types.ts`
+- `tests/test_worker_control.py`
+- `README.md`
+
+Verified:
+
+- backend tests pass: `9 passed`
+- frontend production build succeeds
+
 ## Current State
 
 The project can now be described like this:

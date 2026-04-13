@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,7 @@ from .schemas import (
     ReadyPackLaunchRequest,
     ToeicAnswerRequest,
     ToeicNextRequest,
+    WorkerStartRequest,
     QuizGenerateRequest,
     QuizSubmitRequest,
 )
@@ -28,17 +30,22 @@ from .services import (
     submit_quiz,
 )
 from .storage import SqliteStore
+from .worker_control import WorkerController
 
 
 settings = get_settings()
 store = SqliteStore(settings.app_db_path)
 model = build_model(settings)
+worker_controller = WorkerController(project_root=Path(__file__).resolve().parents[2])
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await store.init()
-    yield
+    try:
+        yield
+    finally:
+        worker_controller.stop()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -150,6 +157,30 @@ async def list_jobs(user_id: str):
 async def queue_job(request: QueueJobRequest):
     try:
         return await queue_background_job(store=store, request=request)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/v1/worker/status")
+async def worker_status():
+    return worker_controller.status()
+
+
+@app.post("/v1/worker/start")
+async def worker_start(request: WorkerStartRequest):
+    try:
+        return worker_controller.start(
+            poll_interval=request.poll_interval,
+            max_jobs=request.max_jobs,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/v1/worker/stop")
+async def worker_stop():
+    try:
+        return worker_controller.stop()
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

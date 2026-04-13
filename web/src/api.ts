@@ -6,6 +6,7 @@ import type {
   ReadyQuizSummary,
   ToeicAnswerResponse,
   ToeicNextResponse,
+  WorkerStatusResponse,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -30,6 +31,38 @@ export async function queuePrebuildJob(userId: string, topic: string) {
   });
   if (!response.ok) {
     throw new Error(`Failed to queue job: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchWorkerStatus(): Promise<WorkerStatusResponse> {
+  const response = await fetch(`${API_BASE}/v1/worker/status`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch worker status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function startWorker(pollInterval = 1): Promise<WorkerStatusResponse> {
+  const response = await fetch(`${API_BASE}/v1/worker/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ poll_interval: pollInterval }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to start worker: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function stopWorker(): Promise<WorkerStatusResponse> {
+  const response = await fetch(`${API_BASE}/v1/worker/stop`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to stop worker: ${response.status} ${detail}`);
   }
   return response.json();
 }

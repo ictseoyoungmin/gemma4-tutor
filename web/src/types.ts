@@ -61,6 +61,14 @@ export type BackgroundJob = {
   updated_at: string;
 };
 
+export type WorkerStatusResponse = {
+  state: "running" | "stopped";
+  pid?: number | null;
+  poll_interval?: number | null;
+  max_jobs?: number | null;
+  last_exit_code?: number | null;
+};
+
 export type DashboardDetail = {
   overview: DashboardOverview;
   skill_snapshots: SkillSnapshot[];

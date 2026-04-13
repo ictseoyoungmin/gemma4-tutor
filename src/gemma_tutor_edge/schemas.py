@@ -172,6 +172,19 @@ class QueueJobResponse(BaseModel):
     job: BackgroundJob
 
 
+class WorkerStartRequest(BaseModel):
+    poll_interval: float = 2.0
+    max_jobs: int | None = None
+
+
+class WorkerStatusResponse(BaseModel):
+    state: Literal["running", "stopped"]
+    pid: int | None = None
+    poll_interval: float | None = None
+    max_jobs: int | None = None
+    last_exit_code: int | None = None
+
+
 class ReadyQuizSummary(BaseModel):
     ready_pack_id: str
     title: str
