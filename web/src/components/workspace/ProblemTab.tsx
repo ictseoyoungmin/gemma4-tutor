@@ -1,13 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  deletePracticeItem,
+  deleteReadyPack,
+  fetchPracticeItemDetail,
   fetchProblemInventory,
+  fetchReadyPackDetail,
   fetchWorkerStatus,
   queueProblemGeneration,
   runHarness,
   startWorker,
   stopWorker,
 } from "../../api";
-import type { HarnessRunResponse, ProblemInventoryResponse, WorkerStatusResponse } from "../../types";
+import type {
+  HarnessRunResponse,
+  PracticeItemDetail,
+  ProblemInventoryResponse,
+  ReadyPackDetail,
+  WorkerStatusResponse,
+} from "../../types";
 
 const partLabels = [
   { key: "part1", label: "Part 1" },
@@ -29,6 +39,8 @@ export function ProblemTab({ userId }: { userId: string }) {
   const [inventory, setInventory] = useState<ProblemInventoryResponse | null>(null);
   const [workerStatus, setWorkerStatus] = useState<WorkerStatusResponse | null>(null);
   const [harnessResult, setHarnessResult] = useState<HarnessRunResponse | null>(null);
+  const [selectedReadyPack, setSelectedReadyPack] = useState<ReadyPackDetail | null>(null);
+  const [selectedPracticeItem, setSelectedPracticeItem] = useState<PracticeItemDetail | null>(null);
   const [status, setStatus] = useState("문제 인벤토리를 불러오는 중...");
   const [readyPackPage, setReadyPackPage] = useState(1);
   const [practiceItemPage, setPracticeItemPage] = useState(1);
@@ -55,9 +67,20 @@ export function ProblemTab({ userId }: { userId: string }) {
     }
     return initial;
   }, [inventory]);
+  const queueTotal = queueStatusCounts.queued + queueStatusCounts.running;
+  const runningRatio = queueTotal > 0 ? (queueStatusCounts.running / queueTotal) * 100 : 0;
+  const queuedRatio = queueTotal > 0 ? (queueStatusCounts.queued / queueTotal) * 100 : 0;
+  const failedHarnessCases = harnessResult?.results.filter((result) => !result.passed) ?? [];
 
   useEffect(() => {
     void loadAll();
+  }, [userId, readyPackPage, practiceItemPage]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void loadAll();
+    }, 3000);
+    return () => window.clearInterval(intervalId);
   }, [userId, readyPackPage, practiceItemPage]);
 
   async function loadAll() {
@@ -105,6 +128,52 @@ export function ProblemTab({ userId }: { userId: string }) {
       setStatus(`하네스 완료 · ${result.passed}/${result.total} passed`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "하네스 실행에 실패했습니다.");
+    }
+  }
+
+  async function handleSelectReadyPack(readyPackId: string) {
+    try {
+      const detail = await fetchReadyPackDetail(userId, readyPackId);
+      setSelectedReadyPack(detail);
+      setSelectedPracticeItem(null);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Ready Pack 미리보기를 가져오지 못했습니다.");
+    }
+  }
+
+  async function handleSelectPracticeItem(itemId: string) {
+    try {
+      const detail = await fetchPracticeItemDetail(userId, itemId);
+      setSelectedPracticeItem(detail);
+      setSelectedReadyPack(null);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Practice item 미리보기를 가져오지 못했습니다.");
+    }
+  }
+
+  async function handleDeleteReadyPack(readyPackId: string) {
+    try {
+      await deleteReadyPack(userId, readyPackId);
+      if (selectedReadyPack?.ready_pack_id === readyPackId) {
+        setSelectedReadyPack(null);
+      }
+      await loadAll();
+      setStatus("Ready Pack을 삭제했습니다.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Ready Pack 삭제에 실패했습니다.");
+    }
+  }
+
+  async function handleDeletePracticeItem(itemId: string) {
+    try {
+      await deletePracticeItem(userId, itemId);
+      if (selectedPracticeItem?.item.item_id === itemId) {
+        setSelectedPracticeItem(null);
+      }
+      await loadAll();
+      setStatus("Practice 문제를 삭제했습니다.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Practice 문제 삭제에 실패했습니다.");
     }
   }
 
@@ -209,27 +278,39 @@ export function ProblemTab({ userId }: { userId: string }) {
           </div>
 
           <div className="workspace-queue-visual">
-            {[
-              ["queued", "Queued"],
-              ["running", "Running"],
-              ["done", "Done"],
-              ["failed", "Failed"],
-            ].map(([key, label]) => (
-              <div key={key} className="workspace-queue-visual__item">
-                <div className="workspace-queue-visual__row">
-                  <span>{label}</span>
-                  <span>{queueStatusCounts[key as keyof typeof queueStatusCounts]}</span>
-                </div>
-                <div className="workspace-queue-visual__bar">
-                  <div
-                    className={`workspace-queue-visual__fill is-${key}`}
-                    style={{
-                      width: `${Math.min(queueStatusCounts[key as keyof typeof queueStatusCounts] * 24, 100)}%`,
-                    }}
-                  />
-                </div>
+            <div className="workspace-queue-visual__item">
+              <div className="workspace-queue-visual__row">
+                <span>Queue</span>
+                <span>{queueTotal}</span>
               </div>
-            ))}
+              <div className="workspace-queue-visual__bar is-stacked">
+                <div
+                  className="workspace-queue-visual__fill is-running"
+                  style={{ width: `${runningRatio}%` }}
+                />
+                <div
+                  className="workspace-queue-visual__fill is-queued"
+                  style={{ width: `${queuedRatio}%` }}
+                />
+              </div>
+              <div className="workspace-queue-visual__legend">
+                <span className="workspace-queue-legend is-running">Running {queueStatusCounts.running}</span>
+                <span className="workspace-queue-legend is-queued">Queued {queueStatusCounts.queued}</span>
+              </div>
+            </div>
+
+            <div className="workspace-queue-visual__item">
+              <div className="workspace-queue-visual__row">
+                <span>Failed</span>
+                <span>{queueStatusCounts.failed}</span>
+              </div>
+              <div className="workspace-queue-visual__bar">
+                <div
+                  className="workspace-queue-visual__fill is-failed"
+                  style={{ width: `${Math.min(queueStatusCounts.failed * 24, 100)}%` }}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="workspace-problem-item-list">
@@ -261,6 +342,17 @@ export function ProblemTab({ userId }: { userId: string }) {
               ))}
             </div>
           ) : null}
+
+          {failedHarnessCases.length ? (
+            <div className="workspace-problem-failure-list">
+              {failedHarnessCases.map((result) => (
+                <div key={`${result.case_id}-detail`} className="workspace-problem-failure">
+                  <div className="workspace-problem-failure__title">{result.case_id} 실패</div>
+                  <div className="workspace-problem-failure__copy">{result.body_preview || "응답 본문 미리보기가 없습니다."}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </article>
       </div>
 
@@ -278,15 +370,33 @@ export function ProblemTab({ userId }: { userId: string }) {
 
           <div className="workspace-pack-list">
             {inventory?.ready_packs.map((pack) => (
-              <div key={pack.ready_pack_id} className="workspace-pack">
+              <div
+                key={pack.ready_pack_id}
+                className={`workspace-pack${selectedReadyPack?.ready_pack_id === pack.ready_pack_id ? " is-active" : ""}`}
+              >
                 <div className="workspace-pack__body">
-                  <div className="workspace-pack__name">{pack.title}</div>
+                  <button
+                    type="button"
+                    className="workspace-problem-link"
+                    onClick={() => void handleSelectReadyPack(pack.ready_pack_id)}
+                  >
+                    <div className="workspace-pack__name">{pack.title}</div>
+                  </button>
                   <div className="workspace-pack__meta">
                     {pack.mode.toUpperCase()} · {new Date(pack.created_at).toLocaleDateString()}
                   </div>
                 </div>
-                <div className={`workspace-pack__badge is-${pack.difficulty}`}>
-                  {difficultyLabel[pack.difficulty] ?? pack.difficulty}
+                <div className="workspace-problem-row-actions">
+                  <div className={`workspace-pack__badge is-${pack.difficulty}`}>
+                    {difficultyLabel[pack.difficulty] ?? pack.difficulty}
+                  </div>
+                  <button
+                    type="button"
+                    className="workspace-problem-delete"
+                    onClick={() => void handleDeleteReadyPack(pack.ready_pack_id)}
+                  >
+                    삭제
+                  </button>
                 </div>
               </div>
             ))}
@@ -326,9 +436,24 @@ export function ProblemTab({ userId }: { userId: string }) {
             {inventory?.practice_items.map((item) => (
               <div key={item.item_id} className="workspace-problem-item">
                 <div className="workspace-problem-item__top">
-                  <div className="workspace-pack__name">{item.part_type.toUpperCase()} · {item.prompt}</div>
-                  <div className={`workspace-pack__badge is-${item.difficulty_level}`}>
-                    {difficultyLabel[item.difficulty_level] ?? item.difficulty_level}
+                  <button
+                    type="button"
+                    className="workspace-problem-link"
+                    onClick={() => void handleSelectPracticeItem(item.item_id)}
+                  >
+                    <div className="workspace-pack__name">{item.part_type.toUpperCase()} · {item.prompt}</div>
+                  </button>
+                  <div className="workspace-problem-row-actions">
+                    <div className={`workspace-pack__badge is-${item.difficulty_level}`}>
+                      {difficultyLabel[item.difficulty_level] ?? item.difficulty_level}
+                    </div>
+                    <button
+                      type="button"
+                      className="workspace-problem-delete"
+                      onClick={() => void handleDeletePracticeItem(item.item_id)}
+                    >
+                      삭제
+                    </button>
                   </div>
                 </div>
                 <div className="workspace-pack__meta">
@@ -357,6 +482,78 @@ export function ProblemTab({ userId }: { userId: string }) {
           </div>
         </article>
       </div>
+
+      {(selectedReadyPack || selectedPracticeItem) ? (
+        <article className="workspace-panel workspace-problem-preview">
+          <div className="workspace-panel__head">
+            <div>
+              <div className="workspace-panel__title">문제 미리보기</div>
+              <div className="workspace-problem-tab__copy">
+                문제 탭에서 선택한 생성 결과를 바로 확인할 수 있습니다.
+              </div>
+            </div>
+          </div>
+
+          {selectedReadyPack ? (
+            <div className="workspace-problem-preview__body">
+              <div className="workspace-ready-pack__title-row">
+                <div>
+                  <div className="workspace-ready-pack__title">{selectedReadyPack.pack.title}</div>
+                  <div className="workspace-ready-pack__meta-line">
+                    {selectedReadyPack.pack.mode} · {difficultyLabel[selectedReadyPack.pack.difficulty] ?? selectedReadyPack.pack.difficulty} · {selectedReadyPack.pack.items.length}문항
+                  </div>
+                </div>
+              </div>
+              <div className="workspace-ready-pack__items">
+                {selectedReadyPack.pack.items.slice(0, 5).map((item, index) => (
+                  <div key={`${selectedReadyPack.ready_pack_id}-${index}`} className="workspace-ready-pack__item">
+                    <div className="workspace-ready-pack__question">Q{index + 1}. {item.prompt}</div>
+                    {item.choices.length ? (
+                      <div className="workspace-ready-pack__choices">
+                        {item.choices.map((choice) => (
+                          <div key={choice} className="workspace-ready-pack__choice">
+                            {choice}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="workspace-ready-pack__feedback">{item.explanation}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {selectedPracticeItem ? (
+            <div className="workspace-problem-preview__body">
+              <div className="workspace-ready-pack__title-row">
+                <div>
+                  <div className="workspace-ready-pack__title">{selectedPracticeItem.item.part_type.toUpperCase()} Practice</div>
+                  <div className="workspace-ready-pack__meta-line">
+                    {difficultyLabel[selectedPracticeItem.item.difficulty_level] ?? selectedPracticeItem.item.difficulty_level} · {selectedPracticeItem.source}
+                  </div>
+                </div>
+              </div>
+              <div className="workspace-ready-pack__item">
+                <div className="workspace-practice__prompt">{selectedPracticeItem.item.prompt}</div>
+                <div className="workspace-practice__question">{selectedPracticeItem.item.question_text}</div>
+                <div className="workspace-practice__options">
+                  {selectedPracticeItem.item.options.map((option, index) => (
+                    <div key={option} className={`workspace-practice__option${selectedPracticeItem.item.correct_option === option ? " is-correct" : ""}`}>
+                      <span className="workspace-practice__option-label">{String.fromCharCode(65 + index)}</span>
+                      <span>{option}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="workspace-practice__result is-correct">
+                  <div className="workspace-practice__result-title">정답: {selectedPracticeItem.item.correct_option}</div>
+                  <div className="workspace-practice__result-copy">{selectedPracticeItem.item.explanation}</div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </article>
+      ) : null}
     </section>
   );
 }

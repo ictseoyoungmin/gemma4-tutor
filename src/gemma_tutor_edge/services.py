@@ -9,13 +9,16 @@ from .jobs import enqueue_problem_generation_job
 from .schemas import (
     ChatRequest,
     ChatResponse,
+    DeleteResourceResponse,
     ImageAnalysisResponse,
     ProblemGenerationRequest,
     ProblemGenerationResponse,
     ProblemInventoryResponse,
+    PracticeItemDetail,
     QueueJobRequest,
     QueueJobResponse,
     ReadyPackLaunchRequest,
+    ReadyPackDetail,
     ReadyPackLaunchResponse,
     QuizGenerateRequest,
     QuizGenerateResponse,
@@ -243,3 +246,31 @@ async def get_problem_inventory(
         practice_item_page=practice_item_page,
         page_size=page_size,
     )
+
+
+async def get_ready_pack_detail(*, store: SqliteStore, user_id: str, ready_pack_id: str) -> ReadyPackDetail:
+    detail = await store.get_ready_pack(user_id, ready_pack_id)
+    if detail is None:
+        raise ValueError(f"Ready pack {ready_pack_id} was not found")
+    return detail
+
+
+async def remove_ready_pack(*, store: SqliteStore, user_id: str, ready_pack_id: str) -> DeleteResourceResponse:
+    deleted = await store.delete_ready_pack(user_id, ready_pack_id)
+    if not deleted:
+        raise ValueError(f"Ready pack {ready_pack_id} was not found")
+    return DeleteResourceResponse(deleted=True, resource_id=ready_pack_id)
+
+
+async def get_practice_item_detail(*, store: SqliteStore, user_id: str, item_id: str) -> PracticeItemDetail:
+    detail = await store.get_practice_item(user_id, item_id)
+    if detail is None:
+        raise ValueError(f"Practice item {item_id} was not found")
+    return detail
+
+
+async def remove_practice_item(*, store: SqliteStore, user_id: str, item_id: str) -> DeleteResourceResponse:
+    deleted = await store.delete_practice_item(user_id, item_id)
+    if not deleted:
+        raise ValueError(f"Practice item {item_id} was not found")
+    return DeleteResourceResponse(deleted=True, resource_id=item_id)

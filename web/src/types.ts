@@ -40,6 +40,17 @@ export type PracticeItemSummary = {
   created_at: string;
 };
 
+export type ReadyPackDetail = {
+  ready_pack_id: string;
+  pack: QuizPack;
+};
+
+export type PracticeItemDetail = {
+  item: ToeicPracticeItem;
+  source: string;
+  created_at: string;
+};
+
 export type QuizItem = {
   prompt: string;
   choices: string[];
@@ -114,6 +125,11 @@ export type HarnessRunResponse = {
   passed: number;
   total: number;
   results: HarnessCaseResult[];
+};
+
+export type DeleteResourceResponse = {
+  deleted: boolean;
+  resource_id: string;
 };
 
 export type DashboardDetail = {

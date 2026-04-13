@@ -1,10 +1,13 @@
 import type {
   ChatResponse,
   DashboardDetail,
+  DeleteResourceResponse,
   HarnessRunResponse,
   ProblemGenerationResponse,
   ProblemInventoryResponse,
+  PracticeItemDetail,
   QuizSubmitResponse,
+  ReadyPackDetail,
   ReadyPackLaunchResponse,
   ReadyQuizSummary,
   ToeicAnswerResponse,
@@ -93,6 +96,55 @@ export async function fetchProblemInventory(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`Failed to fetch problem inventory: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function fetchReadyPackDetail(userId: string, readyPackId: string): Promise<ReadyPackDetail> {
+  const response = await fetch(`${API_BASE}/v1/problems/${userId}/ready-packs/${readyPackId}`);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to fetch ready pack detail: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function deleteReadyPack(
+  userId: string,
+  readyPackId: string,
+): Promise<DeleteResourceResponse> {
+  const response = await fetch(`${API_BASE}/v1/problems/${userId}/ready-packs/${readyPackId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to delete ready pack: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function fetchPracticeItemDetail(
+  userId: string,
+  itemId: string,
+): Promise<PracticeItemDetail> {
+  const response = await fetch(`${API_BASE}/v1/problems/${userId}/practice-items/${itemId}`);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to fetch practice item detail: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function deletePracticeItem(
+  userId: string,
+  itemId: string,
+): Promise<DeleteResourceResponse> {
+  const response = await fetch(`${API_BASE}/v1/problems/${userId}/practice-items/${itemId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to delete practice item: ${response.status} ${detail}`);
   }
   return response.json();
 }

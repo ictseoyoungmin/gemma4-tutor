@@ -26,11 +26,15 @@ from .services import (
     analyze_image,
     generate_quiz,
     get_problem_inventory,
+    get_practice_item_detail,
+    get_ready_pack_detail,
     get_toeic_next_item,
     handle_chat,
     launch_ready_pack,
     queue_problem_generation,
     queue_background_job,
+    remove_practice_item,
+    remove_ready_pack,
     submit_toeic_answer,
     submit_quiz,
 )
@@ -155,6 +159,46 @@ async def problem_inventory(
             practice_item_page=practice_item_page,
             page_size=page_size,
         )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/v1/problems/{user_id}/ready-packs/{ready_pack_id}")
+async def ready_pack_detail(user_id: str, ready_pack_id: str):
+    try:
+        return await get_ready_pack_detail(store=store, user_id=user_id, ready_pack_id=ready_pack_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.delete("/v1/problems/{user_id}/ready-packs/{ready_pack_id}")
+async def ready_pack_delete(user_id: str, ready_pack_id: str):
+    try:
+        return await remove_ready_pack(store=store, user_id=user_id, ready_pack_id=ready_pack_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/v1/problems/{user_id}/practice-items/{item_id}")
+async def practice_item_detail(user_id: str, item_id: str):
+    try:
+        return await get_practice_item_detail(store=store, user_id=user_id, item_id=item_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.delete("/v1/problems/{user_id}/practice-items/{item_id}")
+async def practice_item_delete(user_id: str, item_id: str):
+    try:
+        return await remove_practice_item(store=store, user_id=user_id, item_id=item_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

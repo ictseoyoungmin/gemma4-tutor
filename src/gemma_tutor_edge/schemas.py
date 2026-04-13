@@ -248,6 +248,11 @@ class ProblemInventoryResponse(BaseModel):
     page_size: int = 5
 
 
+class DeleteResourceResponse(BaseModel):
+    deleted: bool
+    resource_id: str
+
+
 class ReadyQuizSummary(BaseModel):
     ready_pack_id: str
     title: str
@@ -259,6 +264,12 @@ class ReadyQuizSummary(BaseModel):
 class ReadyPackDetail(BaseModel):
     ready_pack_id: str
     pack: QuizPack
+
+
+class PracticeItemDetail(BaseModel):
+    item: ToeicPracticeItem
+    source: Literal["seed", "worker_generated"] = "seed"
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class ReadyPackLaunchRequest(BaseModel):

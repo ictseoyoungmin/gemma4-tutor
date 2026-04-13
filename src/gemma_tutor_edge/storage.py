@@ -13,6 +13,7 @@ from .schemas import (
     DashboardDetail,
     DashboardOverview,
     MemoryItem,
+    PracticeItemDetail,
     ProblemInventoryResponse,
     ProblemStats,
     PracticeItemSummary,
@@ -346,6 +347,15 @@ class SqliteStore:
             pack=QuizPack.model_validate_json(row[0]),
         )
 
+    async def delete_ready_pack(self, user_id: str, ready_pack_id: str) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM ready_packs WHERE user_id = ? AND ready_pack_id = ?",
+                (user_id, ready_pack_id),
+            )
+            await db.commit()
+        return cursor.rowcount > 0
+
     async def save_attempt(
         self,
         user_id: str,
@@ -480,6 +490,34 @@ class SqliteStore:
             )
             for row in rows
         ]
+
+    async def get_practice_item(self, user_id: str, item_id: str) -> PracticeItemDetail | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT payload_json, source, created_at
+                FROM practice_items
+                WHERE user_id = ? AND item_id = ?
+                """,
+                (user_id, item_id),
+            )
+            row = await cursor.fetchone()
+        if not row:
+            return None
+        return PracticeItemDetail(
+            item=ToeicPracticeItem.model_validate_json(row[0]),
+            source=row[1],
+            created_at=row[2],
+        )
+
+    async def delete_practice_item(self, user_id: str, item_id: str) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM practice_items WHERE user_id = ? AND item_id = ?",
+                (user_id, item_id),
+            )
+            await db.commit()
+        return cursor.rowcount > 0
 
     async def list_recent_toeic_attempts(self, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
         async with aiosqlite.connect(self.db_path) as db:
