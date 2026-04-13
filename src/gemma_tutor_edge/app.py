@@ -11,6 +11,7 @@ from .llm import build_model
 from .schemas import (
     ChatRequest,
     HealthResponse,
+    ProblemGenerationRequest,
     QueueJobRequest,
     ReadyPackLaunchRequest,
     ToeicAnswerRequest,
@@ -22,9 +23,11 @@ from .schemas import (
 from .services import (
     analyze_image,
     generate_quiz,
+    get_problem_inventory,
     get_toeic_next_item,
     handle_chat,
     launch_ready_pack,
+    queue_problem_generation,
     queue_background_job,
     submit_toeic_answer,
     submit_quiz,
@@ -135,6 +138,25 @@ async def ready_packs(user_id: str):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/v1/problems/{user_id}")
+async def problem_inventory(
+    user_id: str,
+    ready_pack_page: int = 1,
+    practice_item_page: int = 1,
+    page_size: int = 5,
+):
+    try:
+        return await get_problem_inventory(
+            store=store,
+            user_id=user_id,
+            ready_pack_page=ready_pack_page,
+            practice_item_page=practice_item_page,
+            page_size=page_size,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @app.post("/v1/packs/ready/{ready_pack_id}/launch")
 async def ready_pack_launch(ready_pack_id: str, request: ReadyPackLaunchRequest):
     try:
@@ -157,6 +179,14 @@ async def list_jobs(user_id: str):
 async def queue_job(request: QueueJobRequest):
     try:
         return await queue_background_job(store=store, request=request)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/v1/problems/generate")
+async def problems_generate(request: ProblemGenerationRequest):
+    try:
+        return await queue_problem_generation(store=store, request=request)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

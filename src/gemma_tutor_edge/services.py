@@ -5,10 +5,15 @@ from uuid import uuid4
 from .agents import build_quiz_agent, build_tutor_agent, build_vision_agent, run_image_analysis
 from .deps import ContentDeps, TutorDeps
 from .jobs import enqueue_prebuild_job
+from .jobs import enqueue_problem_generation_job
 from .schemas import (
     ChatRequest,
     ChatResponse,
     ImageAnalysisResponse,
+    ProblemGenerationRequest,
+    ProblemGenerationResponse,
+    ProblemInventoryResponse,
+    PracticeItemSummary,
     QueueJobRequest,
     QueueJobResponse,
     ReadyPackLaunchRequest,
@@ -23,7 +28,7 @@ from .schemas import (
     ToeicNextResponse,
 )
 from .storage import SqliteStore
-from .toeic import get_item_by_id, select_next_item
+from .toeic import TOEIC_ITEMS, get_item_by_id, select_next_item
 
 
 async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> ChatResponse:
@@ -85,9 +90,11 @@ async def submit_quiz(*, store: SqliteStore, request: QuizSubmitRequest) -> Quiz
 
 async def get_toeic_next_item(*, store: SqliteStore, request: ToeicNextRequest) -> ToeicNextResponse:
     attempts = await store.list_recent_toeic_attempts(request.user_id, limit=10)
+    practice_items = await store.list_practice_items(request.user_id, part_type=request.part_type, limit=100)
     item, recommended_difficulty, weak_tags, recent_accuracy = select_next_item(
         attempts=attempts,
         part_type=request.part_type,
+        items=practice_items or TOEIC_ITEMS,
     )
     return ToeicNextResponse(
         item=item,
@@ -98,7 +105,8 @@ async def get_toeic_next_item(*, store: SqliteStore, request: ToeicNextRequest) 
 
 
 async def submit_toeic_answer(*, store: SqliteStore, request: ToeicAnswerRequest) -> ToeicAnswerResponse:
-    item = get_item_by_id(request.item_id)
+    practice_items = await store.list_practice_items(request.user_id, limit=200)
+    item = get_item_by_id(request.item_id, practice_items or TOEIC_ITEMS)
     if item is None:
         raise ValueError(f"TOEIC item {request.item_id} was not found")
 
@@ -114,6 +122,7 @@ async def submit_toeic_answer(*, store: SqliteStore, request: ToeicAnswerRequest
     next_item, recommended_difficulty, weak_tags, recent_accuracy = select_next_item(
         attempts=attempts,
         part_type=item.part_type,
+        items=practice_items or TOEIC_ITEMS,
     )
     return ToeicAnswerResponse(
         item_id=request.item_id,
@@ -176,3 +185,40 @@ async def queue_background_job(*, store: SqliteStore, request: QueueJobRequest) 
         job = BackgroundJob(user_id=request.user_id, job_type=request.job_type, payload=request.payload)
         await store.queue_job(job)
     return QueueJobResponse(job=job)
+
+
+async def queue_problem_generation(*, store: SqliteStore, request: ProblemGenerationRequest) -> ProblemGenerationResponse:
+    part_counts = {
+        "part1": request.part1,
+        "part2": request.part2,
+        "part3": request.part3,
+        "part4": request.part4,
+        "part5": request.part5,
+        "part6": request.part6,
+        "part7": request.part7,
+    }
+    job = await enqueue_problem_generation_job(
+        store,
+        user_id=request.user_id,
+        part_counts=part_counts,
+    )
+    return ProblemGenerationResponse(
+        queued_job=job,
+        requested_pack_count=sum(part_counts.values()),
+    )
+
+
+async def get_problem_inventory(
+    *,
+    store: SqliteStore,
+    user_id: str,
+    ready_pack_page: int = 1,
+    practice_item_page: int = 1,
+    page_size: int = 5,
+) -> ProblemInventoryResponse:
+    return await store.problem_inventory(
+        user_id,
+        ready_pack_page=ready_pack_page,
+        practice_item_page=practice_item_page,
+        page_size=page_size,
+    )

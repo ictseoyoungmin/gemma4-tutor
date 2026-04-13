@@ -13,6 +13,9 @@ from .schemas import (
     DashboardDetail,
     DashboardOverview,
     MemoryItem,
+    ProblemInventoryResponse,
+    ProblemStats,
+    PracticeItemSummary,
     QuizPack,
     ReadyPackDetail,
     ReadyQuizSummary,
@@ -130,6 +133,23 @@ class SqliteStore:
                     correct INTEGER NOT NULL,
                     response_time_ms INTEGER NOT NULL,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS practice_items (
+                    item_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    part_type TEXT NOT NULL,
+                    difficulty_level TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    question_text TEXT NOT NULL,
+                    grammar_tag TEXT NOT NULL,
+                    vocab_tag TEXT NULL,
+                    payload_json TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    created_at TEXT NOT NULL
                 )
                 """
             )
@@ -283,6 +303,31 @@ class SqliteStore:
             for row in rows
         ]
 
+    async def list_ready_packs_page(self, user_id: str, *, page: int = 1, page_size: int = 5) -> list[ReadyQuizSummary]:
+        offset = max(page - 1, 0) * page_size
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT ready_pack_id, title, mode, difficulty, created_at
+                FROM ready_packs
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, page_size, offset),
+            )
+            rows = await cursor.fetchall()
+        return [
+            ReadyQuizSummary(
+                ready_pack_id=row[0],
+                title=row[1],
+                mode=row[2],
+                difficulty=row[3],
+                created_at=row[4],
+            )
+            for row in rows
+        ]
+
     async def get_ready_pack(self, user_id: str, ready_pack_id: str) -> ReadyPackDetail | None:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
@@ -351,6 +396,90 @@ class SqliteStore:
                 ),
             )
             await db.commit()
+
+    async def save_practice_item(
+        self,
+        *,
+        user_id: str,
+        item: ToeicPracticeItem,
+        source: str,
+        created_at: str,
+    ) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO practice_items(
+                    item_id, user_id, part_type, difficulty_level, prompt, question_text,
+                    grammar_tag, vocab_tag, payload_json, source, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item.item_id,
+                    user_id,
+                    item.part_type,
+                    item.difficulty_level,
+                    item.prompt,
+                    item.question_text,
+                    item.grammar_tag,
+                    item.vocab_tag,
+                    item.model_dump_json(),
+                    source,
+                    created_at,
+                ),
+            )
+            await db.commit()
+
+    async def list_practice_items(self, user_id: str, *, part_type: str | None = None, limit: int = 100) -> list[ToeicPracticeItem]:
+        query = """
+            SELECT payload_json
+            FROM practice_items
+            WHERE user_id = ?
+        """
+        params: list[Any] = [user_id]
+        if part_type is not None:
+            query += " AND part_type = ?"
+            params.append(part_type)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(query, tuple(params))
+            rows = await cursor.fetchall()
+        return [ToeicPracticeItem.model_validate_json(row[0]) for row in rows]
+
+    async def list_practice_item_summaries(
+        self,
+        user_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 5,
+    ) -> list[PracticeItemSummary]:
+        offset = max(page - 1, 0) * page_size
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT item_id, part_type, difficulty_level, prompt, grammar_tag, vocab_tag, source, created_at
+                FROM practice_items
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, page_size, offset),
+            )
+            rows = await cursor.fetchall()
+        return [
+            PracticeItemSummary(
+                item_id=row[0],
+                part_type=row[1],
+                difficulty_level=row[2],
+                prompt=row[3],
+                grammar_tag=row[4],
+                vocab_tag=row[5],
+                source=row[6],
+                created_at=row[7],
+            )
+            for row in rows
+        ]
 
     async def list_recent_toeic_attempts(self, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
         async with aiosqlite.connect(self.db_path) as db:
@@ -466,6 +595,62 @@ class SqliteStore:
             )
             for row in rows
         ]
+
+    async def problem_stats(self, user_id: str) -> ProblemStats:
+        async with aiosqlite.connect(self.db_path) as db:
+            ready_pack_total = (await (await db.execute(
+                "SELECT COUNT(*) FROM ready_packs WHERE user_id = ?", (user_id,)
+            )).fetchone())[0]
+            practice_total = (await (await db.execute(
+                "SELECT COUNT(*) FROM practice_items WHERE user_id = ?", (user_id,)
+            )).fetchone())[0]
+
+            cursor = await db.execute(
+                """
+                SELECT part_type, COUNT(*)
+                FROM practice_items
+                WHERE user_id = ?
+                GROUP BY part_type
+                """,
+                (user_id,),
+            )
+            practice_rows = await cursor.fetchall()
+
+            cursor = await db.execute(
+                """
+                SELECT mode, COUNT(*)
+                FROM ready_packs
+                WHERE user_id = ?
+                GROUP BY mode
+                """,
+                (user_id,),
+            )
+            mode_rows = await cursor.fetchall()
+
+        return ProblemStats(
+            total_ready_packs=ready_pack_total,
+            total_practice_items=practice_total,
+            practice_items_by_part={row[0]: row[1] for row in practice_rows},
+            ready_packs_by_mode={row[0]: row[1] for row in mode_rows},
+        )
+
+    async def problem_inventory(
+        self,
+        user_id: str,
+        *,
+        ready_pack_page: int = 1,
+        practice_item_page: int = 1,
+        page_size: int = 5,
+    ) -> ProblemInventoryResponse:
+        return ProblemInventoryResponse(
+            stats=await self.problem_stats(user_id),
+            ready_packs=await self.list_ready_packs_page(user_id, page=ready_pack_page, page_size=page_size),
+            practice_items=await self.list_practice_item_summaries(user_id, page=practice_item_page, page_size=page_size),
+            active_jobs=await self.list_active_jobs(user_id),
+            ready_pack_page=ready_pack_page,
+            practice_item_page=practice_item_page,
+            page_size=page_size,
+        )
 
     async def dashboard_overview(self, user_id: str) -> DashboardOverview:
         async with aiosqlite.connect(self.db_path) as db:

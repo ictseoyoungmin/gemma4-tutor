@@ -1226,6 +1226,111 @@
   font-weight: 600;
 }
 
+.workspace-problem-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workspace-problem-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.workspace-problem-tab__copy {
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.workspace-problem-controls,
+.workspace-problem-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workspace-problem-control {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--b0);
+  background: var(--bg2);
+}
+
+.workspace-problem-control__row,
+.workspace-problem-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspace-problem-control__input {
+  width: 72px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--b1);
+  background: var(--bg3);
+  color: var(--t0);
+  font: inherit;
+}
+
+.workspace-problem-tab__actions,
+.workspace-problem-chip-row,
+.workspace-problem-tab__stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workspace-problem-status {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--b1);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.workspace-problem-status.is-running {
+  color: var(--g1);
+  background: var(--g0);
+}
+
+.workspace-problem-status.is-stopped {
+  color: var(--t2);
+  background: var(--bg2);
+}
+
+.workspace-problem-stat {
+  min-width: 88px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--b0);
+  background: var(--bg2);
+}
+
+.workspace-problem-stat__label {
+  margin-bottom: 4px;
+  color: var(--t3);
+  font-size: 10px;
+}
+
+.workspace-problem-stat__value {
+  color: var(--t0);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.workspace-problem-item {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--b0);
+  background: var(--bg2);
+}
+
 .workspace-queue {
   overflow: hidden;
   border-radius: 16px;
@@ -1594,6 +1699,7 @@
 
   .workspace-progress-row,
   .workspace-practice__options,
+  .workspace-problem-grid,
   .workspace-ready-pack__layout,
   .workspace-media-grid,
   .workspace-modules,

@@ -29,6 +29,17 @@ export type ReadyQuizSummary = {
   created_at: string;
 };
 
+export type PracticeItemSummary = {
+  item_id: string;
+  part_type: string;
+  difficulty_level: string;
+  prompt: string;
+  grammar_tag: string;
+  vocab_tag?: string | null;
+  source: string;
+  created_at: string;
+};
+
 export type QuizItem = {
   prompt: string;
   choices: string[];
@@ -67,6 +78,28 @@ export type WorkerStatusResponse = {
   poll_interval?: number | null;
   max_jobs?: number | null;
   last_exit_code?: number | null;
+};
+
+export type ProblemStats = {
+  total_ready_packs: number;
+  total_practice_items: number;
+  practice_items_by_part: Record<string, number>;
+  ready_packs_by_mode: Record<string, number>;
+};
+
+export type ProblemInventoryResponse = {
+  stats: ProblemStats;
+  ready_packs: ReadyQuizSummary[];
+  practice_items: PracticeItemSummary[];
+  active_jobs: BackgroundJob[];
+  ready_pack_page: number;
+  practice_item_page: number;
+  page_size: number;
+};
+
+export type ProblemGenerationResponse = {
+  queued_job: BackgroundJob;
+  requested_pack_count: number;
 };
 
 export type DashboardDetail = {

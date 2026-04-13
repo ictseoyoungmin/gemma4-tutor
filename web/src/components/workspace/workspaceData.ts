@@ -1,4 +1,4 @@
-export const navTabs = ["학습 공간", "분석", "Ready Pack"];
+export const navTabs = ["학습 공간", "문제", "분석", "Ready Pack"];
 
 export const heroTags = ["TOEIC 준비중", "LC · RC"];
 
@@ -11,29 +11,17 @@ export const heroStats = [
 export const skillProgress = [
   { name: "Part 5 문법", score: "82%", width: "82%", tone: "default" },
   { name: "어휘", score: "74%", width: "74%", tone: "amber" },
-  { name: "작문 교정", score: "68%", width: "68%", tone: "green" },
+  { name: "LC 응답", score: "68%", width: "68%", tone: "green" },
   { name: "독해 속도", score: "91%", width: "91%", tone: "cream" },
-];
-
-export const readyPacks = [
-  { name: "Part 5 핵심 문법 40선", meta: "40문항 · 30분", difficulty: "easy" },
-  { name: "비즈니스 어휘 실전편", meta: "60문항 · 45분", difficulty: "med" },
-  { name: "RC 고난도 모의고사", meta: "100문항 · 75분", difficulty: "hard" },
 ];
 
 export const practiceModules = [
   {
     id: "toeic-practice",
-    title: "다음 학습 과제",
-    description: "튜터에게 맞춤형 TOEIC 문제 또는 학습 태스크를 요청합니다.",
+    title: "TOEIC Part 5 Practice",
+    description: "워커가 생성한 Practice 문제와 저장된 문제 bank를 바탕으로 즉시 풀이를 시작합니다.",
     badge: "추천",
     variant: "primary",
-  },
-  {
-    id: "writing-lab",
-    title: "작문 교정",
-    description: "문장을 입력하고 즉각적인 교정과 상세 설명을 받아보세요.",
-    variant: "slate",
   },
   {
     id: "ready-pack",
@@ -44,8 +32,8 @@ export const practiceModules = [
 ];
 
 export const queueItems = [
-  "Ready Pack 런처 — 대시보드에서 준비된 팩을 학습 화면으로 즉시 실행",
-  "작문 교정 워크스페이스 — 첨삭 및 재작성 보조 도구",
+  "문제 탭 — 파트별 생성량, 페이지네이션, 워커 상태 모니터링",
+  "실전 분석 탭 — 생성 품질, 파트 커버리지, 최근 풀이 경향 표시",
   "성찰 및 추천 패널 — 학습 후 요약과 다음 단계 추천",
 ];
 

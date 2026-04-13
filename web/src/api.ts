@@ -1,6 +1,8 @@
 import type {
   ChatResponse,
   DashboardDetail,
+  ProblemGenerationResponse,
+  ProblemInventoryResponse,
   QuizSubmitResponse,
   ReadyPackLaunchResponse,
   ReadyQuizSummary,
@@ -71,6 +73,50 @@ export async function fetchReadyPacks(userId: string): Promise<ReadyQuizSummary[
   const response = await fetch(`${API_BASE}/v1/packs/ready/${userId}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch ready packs: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchProblemInventory(
+  userId: string,
+  readyPackPage = 1,
+  practiceItemPage = 1,
+  pageSize = 5,
+): Promise<ProblemInventoryResponse> {
+  const params = new URLSearchParams({
+    ready_pack_page: String(readyPackPage),
+    practice_item_page: String(practiceItemPage),
+    page_size: String(pageSize),
+  });
+  const response = await fetch(`${API_BASE}/v1/problems/${userId}?${params.toString()}`);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to fetch problem inventory: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function queueProblemGeneration(
+  userId: string,
+  counts: Record<string, number>,
+): Promise<ProblemGenerationResponse> {
+  const response = await fetch(`${API_BASE}/v1/problems/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      part1: counts.part1 ?? 0,
+      part2: counts.part2 ?? 0,
+      part3: counts.part3 ?? 0,
+      part4: counts.part4 ?? 0,
+      part5: counts.part5 ?? 0,
+      part6: counts.part6 ?? 0,
+      part7: counts.part7 ?? 0,
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to queue problem generation: ${response.status} ${detail}`);
   }
   return response.json();
 }

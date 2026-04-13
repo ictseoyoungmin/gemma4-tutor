@@ -308,6 +308,41 @@ Verified:
 - backend tests pass: `9 passed`
 - frontend production build succeeds
 
+### 16. Problem tab and worker-generated catalog follow-up
+
+Expanded the learner workspace around a dedicated problem-management surface.
+
+Implemented:
+
+- added a new `문제` top tab in the learner workspace,
+- removed the separate writing-correction center module because that function remains in the left tutor chat lane,
+- added worker-driven problem-set generation with per-part pack counts,
+- added a stored practice-item bank so TOEIC Part 5 Practice can consume worker-generated items before falling back to seed items,
+- added a problem inventory view with stats, pagination, worker status, active jobs, and generation controls.
+
+Added or updated:
+
+- `src/gemma_tutor_edge/schemas.py`
+- `src/gemma_tutor_edge/storage.py`
+- `src/gemma_tutor_edge/jobs.py`
+- `src/gemma_tutor_edge/services.py`
+- `src/gemma_tutor_edge/app.py`
+- `src/gemma_tutor_edge/toeic.py`
+- `web/src/api.ts`
+- `web/src/types.ts`
+- `web/src/components/LearnerWorkspace.tsx`
+- `web/src/components/workspace/WorkspaceNav.tsx`
+- `web/src/components/workspace/WorkspaceMain.tsx`
+- `web/src/components/workspace/ProblemTab.tsx`
+- `web/src/components/workspace/workspace.css`
+- `web/src/components/workspace/workspaceData.ts`
+- `tests/test_worker_queue.py`
+
+Verified:
+
+- backend tests pass: `10 passed`
+- frontend production build succeeds
+
 ## Current State
 
 The project can now be described like this:

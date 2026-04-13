@@ -6,10 +6,11 @@ import {
   queueItems,
   skillProgress,
 } from "./workspaceData";
+import { ProblemTab } from "./ProblemTab";
 import { PracticePanel } from "./PracticePanel";
 import { ReadyPackPanel } from "./ReadyPackPanel";
 
-type ActiveModule = "dashboard" | "toeic-practice" | "writing-lab" | "ready-pack";
+type ActiveModule = "dashboard" | "toeic-practice" | "ready-pack";
 
 function ModuleIcon({ variant }: { variant: string }) {
   if (variant === "primary") {
@@ -68,7 +69,7 @@ function MediaAudioPlaceholder() {
   );
 }
 
-export function WorkspaceMain({ userId }: { userId: string }) {
+export function WorkspaceMain({ userId, activeTab }: { userId: string; activeTab: string }) {
   const [activeModule, setActiveModule] = useState<ActiveModule>("dashboard");
 
   function renderActiveModule() {
@@ -80,36 +81,38 @@ export function WorkspaceMain({ userId }: { userId: string }) {
       return <ReadyPackPanel userId={userId} />;
     }
 
-    if (activeModule === "writing-lab") {
-      return (
-        <section className="workspace-panel workspace-module-stage workspace-module-stage--placeholder">
+    return null;
+  }
+
+  if (activeTab === "문제") {
+    return (
+      <main className="workspace-main">
+        <ProblemTab userId={userId} />
+      </main>
+    );
+  }
+
+  if (activeTab === "분석") {
+    return (
+      <main className="workspace-main">
+        <section className="workspace-panel workspace-module-stage workspace-fade-in">
           <div className="workspace-panel__head">
             <div>
-              <div className="workspace-panel__title">Writing Lab</div>
-              <div className="workspace-module-stage__subcopy">
-                작문 교정 모듈은 다음 단계에서 실제 첨삭 플로우로 연결됩니다.
-              </div>
-            </div>
-            <button
-              type="button"
-              className="workspace-module-stage__close"
-              onClick={() => setActiveModule("dashboard")}
-            >
-              대시보드로
-            </button>
-          </div>
-
-          <div className="workspace-module-stage__placeholder">
-            <div className="workspace-module-stage__placeholder-title">Writing correction workspace</div>
-            <div className="workspace-module-stage__placeholder-copy">
-              문장을 입력하고 교정 결과, 더 자연스러운 재작성, 짧은 규칙 설명을 한 번에 보여주는 전용 패널이 들어올 자리입니다.
+              <div className="workspace-panel__title">분석</div>
+              <div className="workspace-module-stage__subcopy">문제 생성 품질과 풀이 데이터를 다음 단계에서 연결합니다.</div>
             </div>
           </div>
         </section>
-      );
-    }
+      </main>
+    );
+  }
 
-    return null;
+  if (activeTab === "Ready Pack") {
+    return (
+      <main className="workspace-main">
+        <ReadyPackPanel userId={userId} />
+      </main>
+    );
   }
 
   return (

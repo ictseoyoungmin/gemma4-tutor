@@ -1,6 +1,14 @@
 import { navTabs } from "./workspaceData";
 
-export function WorkspaceNav({ userId }: { userId: string }) {
+export function WorkspaceNav({
+  userId,
+  activeTab,
+  onTabChange,
+}: {
+  userId: string;
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+}) {
   return (
     <nav className="workspace-nav">
       <div className="workspace-nav__left">
@@ -14,11 +22,12 @@ export function WorkspaceNav({ userId }: { userId: string }) {
         <div className="workspace-nav__divider" />
 
         <div className="workspace-tabs">
-          {navTabs.map((tab, index) => (
+          {navTabs.map((tab) => (
             <button
               key={tab}
               type="button"
-              className={`workspace-tab${index === 0 ? " is-active" : ""}`}
+              className={`workspace-tab${activeTab === tab ? " is-active" : ""}`}
+              onClick={() => onTabChange(tab)}
             >
               {tab}
             </button>

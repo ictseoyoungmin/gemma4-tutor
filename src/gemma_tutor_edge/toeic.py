@@ -117,14 +117,16 @@ def select_next_item(
     *,
     attempts: list[dict[str, object]],
     part_type: str,
+    items: list[ToeicPracticeItem] | None = None,
 ) -> tuple[ToeicPracticeItem, str, list[str], float]:
+    item_pool = items or TOEIC_ITEMS
     weak_tags = derive_weak_tags(attempts)
     recommended_difficulty = infer_recommended_difficulty(attempts)
     recent_accuracy = calculate_recent_accuracy(attempts[:5])
     recent_item_ids = {str(attempt["item_id"]) for attempt in attempts[:3]}
 
     candidates = [
-        item for item in TOEIC_ITEMS if item.part_type == part_type and item.difficulty_level == recommended_difficulty
+        item for item in item_pool if item.part_type == part_type and item.difficulty_level == recommended_difficulty
     ]
     if weak_tags:
         weak_match = [
@@ -135,12 +137,12 @@ def select_next_item(
         if weak_match:
             candidates = weak_match
     unseen_candidates = [item for item in candidates if item.item_id not in recent_item_ids]
-    selected_pool = unseen_candidates or candidates or [item for item in TOEIC_ITEMS if item.part_type == part_type]
+    selected_pool = unseen_candidates or candidates or [item for item in item_pool if item.part_type == part_type]
     return selected_pool[0], recommended_difficulty, weak_tags, recent_accuracy
 
 
-def get_item_by_id(item_id: str) -> ToeicPracticeItem | None:
-    for item in TOEIC_ITEMS:
+def get_item_by_id(item_id: str, items: list[ToeicPracticeItem] | None = None) -> ToeicPracticeItem | None:
+    for item in items or TOEIC_ITEMS:
         if item.item_id == item_id:
             return item
     return None

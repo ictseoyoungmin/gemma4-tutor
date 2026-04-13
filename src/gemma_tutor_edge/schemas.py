@@ -85,7 +85,7 @@ class QuizSubmitResponse(BaseModel):
 
 class ToeicPracticeItem(BaseModel):
     item_id: str
-    part_type: Literal["part5"]
+    part_type: Literal["part1", "part2", "part3", "part4", "part5", "part6", "part7"]
     difficulty_level: Literal["easy", "medium", "hard"]
     question_text: str
     prompt: str
@@ -129,6 +129,17 @@ class ToeicAnswerResponse(BaseModel):
     recent_accuracy: float = 0.0
 
 
+class PracticeItemSummary(BaseModel):
+    item_id: str
+    part_type: Literal["part1", "part2", "part3", "part4", "part5", "part6", "part7"]
+    difficulty_level: Literal["easy", "medium", "hard"]
+    prompt: str
+    grammar_tag: str
+    vocab_tag: str | None = None
+    source: Literal["seed", "worker_generated"] = "seed"
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class ImageAnalysisResponse(BaseModel):
     scene_summary: str
     vocabulary: list[str] = Field(default_factory=list)
@@ -154,7 +165,7 @@ class AchievementCard(BaseModel):
 class BackgroundJob(BaseModel):
     job_id: str = Field(default_factory=lambda: uuid4().hex)
     user_id: str
-    job_type: Literal["prebuild_quiz", "summarize_session", "refresh_dashboard", "placeholder"]
+    job_type: Literal["prebuild_quiz", "generate_problem_set", "summarize_session", "refresh_dashboard", "placeholder"]
     status: Literal["queued", "running", "done", "failed"] = "queued"
     payload: dict[str, Any] = Field(default_factory=dict)
     result: dict[str, Any] = Field(default_factory=dict)
@@ -164,7 +175,7 @@ class BackgroundJob(BaseModel):
 
 class QueueJobRequest(BaseModel):
     user_id: str
-    job_type: Literal["prebuild_quiz", "summarize_session", "refresh_dashboard", "placeholder"]
+    job_type: Literal["prebuild_quiz", "generate_problem_set", "summarize_session", "refresh_dashboard", "placeholder"]
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -183,6 +194,39 @@ class WorkerStatusResponse(BaseModel):
     poll_interval: float | None = None
     max_jobs: int | None = None
     last_exit_code: int | None = None
+
+
+class ProblemGenerationRequest(BaseModel):
+    user_id: str
+    part1: int = Field(default=0, ge=0, le=20)
+    part2: int = Field(default=0, ge=0, le=20)
+    part3: int = Field(default=0, ge=0, le=20)
+    part4: int = Field(default=0, ge=0, le=20)
+    part5: int = Field(default=0, ge=0, le=20)
+    part6: int = Field(default=0, ge=0, le=20)
+    part7: int = Field(default=0, ge=0, le=20)
+
+
+class ProblemGenerationResponse(BaseModel):
+    queued_job: BackgroundJob
+    requested_pack_count: int
+
+
+class ProblemStats(BaseModel):
+    total_ready_packs: int = 0
+    total_practice_items: int = 0
+    practice_items_by_part: dict[str, int] = Field(default_factory=dict)
+    ready_packs_by_mode: dict[str, int] = Field(default_factory=dict)
+
+
+class ProblemInventoryResponse(BaseModel):
+    stats: ProblemStats
+    ready_packs: list[ReadyQuizSummary] = Field(default_factory=list)
+    practice_items: list[PracticeItemSummary] = Field(default_factory=list)
+    active_jobs: list[BackgroundJob] = Field(default_factory=list)
+    ready_pack_page: int = 1
+    practice_item_page: int = 1
+    page_size: int = 5
 
 
 class ReadyQuizSummary(BaseModel):
