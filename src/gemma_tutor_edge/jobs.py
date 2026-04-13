@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from uuid import uuid4
 
 from .agents import build_quiz_agent
 from .deps import ContentDeps
+from .harness.runner import validate_generated_pack
 from .schemas import BackgroundJob, QuizPack, QuizItem, ToeicPracticeItem
 from .storage import SqliteStore
+
+
+HANGUL_PATTERN = re.compile(r"[가-힣]")
 
 
 async def enqueue_prebuild_job(store: SqliteStore, user_id: str, topic: str, mode: str = "grammar", difficulty: str = "medium") -> BackgroundJob:
@@ -42,21 +47,21 @@ def build_seed_ready_pack(*, topic: str, mode: str, difficulty: str) -> QuizPack
             difficulty=difficulty,
             items=[
                 QuizItem(
-                    prompt=f"구매팀은 점심 전에 최신 거래처 목록을 ___ 예정입니다.",
+                    prompt="The purchasing team will ___ the updated vendor list before lunch.",
                     choices=["review", "reviews", "reviewed", "reviewing"],
                     answer="review",
                     explanation="'will' 뒤에는 동사원형이 와야 하므로 'review'가 정답입니다.",
                     skill_tags=["toeic", "part5", "grammar", "modal_base_form"],
                 ),
                 QuizItem(
-                    prompt="모든 영수증은 금요일 오후까지 ___ 제출되어야 합니다.",
+                    prompt="All receipts must be submitted ___ Friday afternoon.",
                     choices=["at", "by", "since", "during"],
                     answer="by",
                     explanation="'by'는 마감 시점을 나타내므로 '금요일 오후까지'라는 뜻에 맞습니다.",
                     skill_tags=["toeic", "part5", "grammar", "deadline_preposition"],
                 ),
                 QuizItem(
-                    prompt="새 정책이 명확히 설명되어 직원들이 그것을 ___ 이해했습니다.",
+                    prompt="The new policy was explained clearly, so employees understood it ___.",
                     choices=["complete", "completed", "completely", "completion"],
                     answer="completely",
                     explanation="'understood'를 수식하는 부사가 필요하므로 'completely'가 맞습니다.",
@@ -71,7 +76,7 @@ def build_seed_ready_pack(*, topic: str, mode: str, difficulty: str) -> QuizPack
         difficulty=difficulty,
         items=[
             QuizItem(
-                prompt=f"{topic}에 대한 업무 보고 문장으로 가장 자연스러운 것을 고르세요.",
+                prompt=f"Choose the most natural sentence for a workplace update about {topic}.",
                 choices=[
                     "The report are ready for review.",
                     "The report is ready for review.",
@@ -119,6 +124,22 @@ PACK_TEMPLATE_CATALOG: dict[str, list[dict[str, str | int]]] = {
 }
 
 
+def contains_hangul(text: str) -> bool:
+    return bool(HANGUL_PATTERN.search(text))
+
+
+def make_unique_title(base_title: str, existing_titles: set[str]) -> str:
+    if base_title not in existing_titles:
+        existing_titles.add(base_title)
+        return base_title
+    suffix = 2
+    while f"{base_title} ({suffix})" in existing_titles:
+        suffix += 1
+    unique_title = f"{base_title} ({suffix})"
+    existing_titles.add(unique_title)
+    return unique_title
+
+
 def build_part5_practice_item(index: int, difficulty: str) -> ToeicPracticeItem:
     examples = [
         (
@@ -163,28 +184,59 @@ def build_part5_practice_item(index: int, difficulty: str) -> ToeicPracticeItem:
     )
 
 
+def build_practice_item_from_pack(pack: QuizPack, difficulty: str, index: int) -> ToeicPracticeItem:
+    source_item = pack.items[index % len(pack.items)]
+    if len(source_item.choices) == 4 and source_item.answer in source_item.choices:
+        return ToeicPracticeItem(
+            item_id=uuid4().hex,
+            part_type="part5",
+            difficulty_level=difficulty,  # type: ignore[arg-type]
+            prompt="Choose the best answer to complete the sentence.",
+            question_text=source_item.prompt,
+            options=source_item.choices,
+            correct_option=source_item.answer,
+            explanation=source_item.explanation,
+            grammar_tag="worker_generated_part5",
+            vocab_tag="toeic",
+            validated=True,
+            validation_score=0.9,
+        )
+    return build_part5_practice_item(index, difficulty)
+
+
 def build_pack_from_template(template: dict[str, str | int], part_type: str, ordinal: int) -> QuizPack:
     title = str(template["title"])
     difficulty = str(template["difficulty"])
     item_count = int(template["item_count"])
+    example_bank = [
+        ("The annual budget will be finalized next week.", ["is", "are", "was", "be"], "be", "'will' 뒤에는 동사원형이 와야 합니다."),
+        ("Applicants should submit the completed form before Friday.", ["submit", "submits", "submitted", "submitting"], "submit", "조동사 should 뒤에는 동사원형이 옵니다."),
+        ("The manager spoke so ___ that everyone understood the new policy.", ["clear", "clearly", "clearness", "cleared"], "clearly", "동사를 수식하는 부사가 필요합니다."),
+        ("Because the shipment was delayed, the team adjusted the schedule.", ["Because", "Despite", "Unless", "During"], "Because", "원인 관계를 나타내는 접속사가 필요합니다."),
+    ]
     return QuizPack(
         title=title,
         mode="toeic",
         difficulty=difficulty,  # type: ignore[arg-type]
         items=[
             QuizItem(
-                prompt=f"{part_type.upper()} 유형 {ordinal}번 팩 예제 문항 {i + 1}",
-                choices=["A", "B", "C", "D"],
-                answer="A",
-                explanation=f"{title}의 {i + 1}번 문항 해설입니다. 정답 근거를 한국어로 짧게 정리했습니다.",
+                prompt=example_bank[i % len(example_bank)][0],
+                choices=example_bank[i % len(example_bank)][1],
+                answer=example_bank[i % len(example_bank)][2],
+                explanation=example_bank[i % len(example_bank)][3],
                 skill_tags=["toeic", part_type, difficulty],
             )
-            for i in range(min(item_count, 12))
+            for i in range(item_count)
         ],
     )
 
 
-def validate_quiz_pack(pack: QuizPack) -> list[str]:
+def validate_quiz_pack(
+    pack: QuizPack,
+    *,
+    require_english_items: bool = False,
+    require_korean_explanations: bool = False,
+) -> list[str]:
     errors: list[str] = []
     if not pack.title.strip():
         errors.append("missing_title")
@@ -195,6 +247,15 @@ def validate_quiz_pack(pack: QuizPack) -> list[str]:
             errors.append(f"item_{index}_missing_prompt")
         if not item.explanation.strip():
             errors.append(f"item_{index}_missing_explanation")
+        if require_english_items:
+            if contains_hangul(item.prompt):
+                errors.append(f"item_{index}_prompt_not_english")
+            if any(contains_hangul(choice) for choice in item.choices):
+                errors.append(f"item_{index}_choice_not_english")
+            if contains_hangul(item.answer):
+                errors.append(f"item_{index}_answer_not_english")
+        if require_korean_explanations and not contains_hangul(item.explanation):
+            errors.append(f"item_{index}_explanation_not_korean")
         if item.choices:
             if len(item.choices) != 4:
                 errors.append(f"item_{index}_invalid_choice_count")
@@ -207,7 +268,17 @@ def validate_quiz_pack(pack: QuizPack) -> list[str]:
     return errors
 
 
-async def generate_ready_pack(*, store: SqliteStore, model, user_id: str, topic: str, mode: str, difficulty: str) -> tuple[QuizPack, dict]:
+async def generate_ready_pack(
+    *,
+    store: SqliteStore,
+    model,
+    user_id: str,
+    topic: str,
+    mode: str,
+    difficulty: str,
+    item_count: int = 3,
+    part_type: str = "part5",
+) -> tuple[QuizPack, dict]:
     generation_meta: dict[str, object] = {
         "topic": topic,
         "mode": mode,
@@ -220,17 +291,45 @@ async def generate_ready_pack(*, store: SqliteStore, model, user_id: str, topic:
     if model != "test":
         agent = build_quiz_agent(model)
         deps = ContentDeps(user_id=user_id, store=store)
-        prompt = (
-            f"Create a {mode} ready pack about {topic}. "
-            f"Difficulty: {difficulty}. Count: 3. "
-            "Prefer workplace English. Include concise explanations."
-        )
+        if mode == "toeic":
+            prompt = (
+                f'Create a TOEIC {part_type.upper()} ready pack with the exact Korean title "{topic}". '
+                f"Difficulty: {difficulty}. Count: {item_count}. "
+                "All questions, answer choices, and correct answers must be written in English only. "
+                "All explanations must be written in Korean only. "
+                "Keep every item practical and test-like, not placeholder content. "
+                "Return a fully structured pack."
+            )
+        else:
+            prompt = (
+                f'Create an English learning ready pack with the exact Korean title "{topic}". '
+                f"Difficulty: {difficulty}. Count: {item_count}. "
+                "All question bodies and answer content should be written in English. "
+                "All explanations must be written in Korean only. "
+                "Return a fully structured pack."
+            )
         try:
             result = await agent.run(prompt, deps=deps)
-            candidate_pack = result.output
-            validation_errors = validate_quiz_pack(candidate_pack)
+            candidate_pack = result.output.model_copy(
+                update={
+                    "title": topic,
+                    "mode": mode,
+                    "difficulty": difficulty,
+                }
+            )
+            validation_errors = validate_quiz_pack(
+                candidate_pack,
+                require_english_items=True,
+                require_korean_explanations=True,
+            )
+            harness_result = validate_generated_pack(
+                candidate_pack,
+                require_english_items=True,
+                require_korean_explanations=True,
+            )
             generation_meta["validation_errors"] = validation_errors
-            if not validation_errors:
+            generation_meta["harness"] = harness_result
+            if not validation_errors and harness_result["passed"]:
                 generation_meta["strategy"] = "llm"
                 generation_meta["validated"] = True
                 return candidate_pack, generation_meta
@@ -240,7 +339,16 @@ async def generate_ready_pack(*, store: SqliteStore, model, user_id: str, topic:
             generation_meta["error"] = str(exc)
 
     seed_pack = build_seed_ready_pack(topic=topic, mode=mode, difficulty=difficulty)
-    generation_meta["validation_errors"] = validate_quiz_pack(seed_pack)
+    generation_meta["validation_errors"] = validate_quiz_pack(
+        seed_pack,
+        require_english_items=True,
+        require_korean_explanations=True,
+    )
+    generation_meta["harness"] = validate_generated_pack(
+        seed_pack,
+        require_english_items=True,
+        require_korean_explanations=True,
+    )
     generation_meta["validated"] = True
     return seed_pack, generation_meta
 
@@ -281,22 +389,47 @@ async def process_job(*, store: SqliteStore, model, job: BackgroundJob) -> dict:
         created_pack_ids: list[str] = []
         created_practice_item_ids: list[str] = []
         now = datetime.now(timezone.utc).isoformat()
+        existing_titles = {pack.title for pack in await store.list_ready_packs(job.user_id, limit=500)}
+        per_part_sequence = {
+            part_type: len([title for title in existing_titles if title.startswith(part_type.upper())])
+            for part_type in part_counts
+        }
 
         for part_type, count in part_counts.items():
             templates = PACK_TEMPLATE_CATALOG.get(part_type, [])
             for index in range(count):
-                template = templates[index % len(templates)] if templates else {
-                    "title": f"{part_type.upper()} 실전 팩 {index + 1}",
+                template_index = index % len(templates) if templates else 0
+                template = templates[template_index] if templates else {
+                    "title": f"{part_type.upper()} 실전 팩 {per_part_sequence.get(part_type, 0) + index + 1}",
                     "difficulty": "medium",
                     "item_count": 20,
                 }
-                pack = build_pack_from_template(template, part_type, index + 1)
+                base_title = str(template["title"])
+                unique_title = make_unique_title(base_title, existing_titles)
+                difficulty = str(template["difficulty"])
+                item_count = int(template["item_count"])
+                pack, generation_meta = await generate_ready_pack(
+                    store=store,
+                    model=model,
+                    user_id=job.user_id,
+                    topic=unique_title,
+                    mode="toeic",
+                    difficulty=difficulty,
+                    item_count=item_count,
+                    part_type=part_type,
+                )
+                if generation_meta["strategy"] == "seed_fallback":
+                    pack = build_pack_from_template(
+                        {**template, "title": unique_title},
+                        part_type,
+                        per_part_sequence.get(part_type, 0) + index + 1,
+                    )
                 ready_pack_id = uuid4().hex
                 await store.save_ready_pack(job.user_id, ready_pack_id, pack, created_at=now)
                 created_pack_ids.append(ready_pack_id)
 
                 if part_type == "part5":
-                    practice_item = build_part5_practice_item(index, str(template["difficulty"]))
+                    practice_item = build_practice_item_from_pack(pack, difficulty, index)
                     await store.save_practice_item(
                         user_id=job.user_id,
                         item=practice_item,

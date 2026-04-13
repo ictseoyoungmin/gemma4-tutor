@@ -1286,6 +1286,55 @@
   flex-wrap: wrap;
 }
 
+.workspace-queue-visual {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-queue-visual__item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--b0);
+  background: var(--bg2);
+}
+
+.workspace-queue-visual__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--t1);
+}
+
+.workspace-queue-visual__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg3);
+  overflow: hidden;
+}
+
+.workspace-queue-visual__fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.workspace-queue-visual__fill.is-queued {
+  background: var(--a2);
+}
+
+.workspace-queue-visual__fill.is-running {
+  background: #7dc9ff;
+}
+
+.workspace-queue-visual__fill.is-done {
+  background: var(--g1);
+}
+
+.workspace-queue-visual__fill.is-failed {
+  background: var(--r1);
+}
+
 .workspace-problem-status {
   padding: 4px 10px;
   border-radius: 999px;

@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from .agents import build_quiz_agent, build_tutor_agent, build_vision_agent, run_image_analysis
 from .deps import ContentDeps, TutorDeps
-from .jobs import enqueue_prebuild_job
+from .jobs import build_seed_ready_pack, enqueue_prebuild_job
 from .jobs import enqueue_problem_generation_job
 from .schemas import (
     ChatRequest,
@@ -13,7 +13,6 @@ from .schemas import (
     ProblemGenerationRequest,
     ProblemGenerationResponse,
     ProblemInventoryResponse,
-    PracticeItemSummary,
     QueueJobRequest,
     QueueJobResponse,
     ReadyPackLaunchRequest,
@@ -32,6 +31,19 @@ from .toeic import TOEIC_ITEMS, get_item_by_id, select_next_item
 
 
 async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> ChatResponse:
+    if model == "test":
+        session_id = request.session_id or uuid4().hex
+        return ChatResponse(
+            session_id=session_id,
+            run_id=f"test-{uuid4().hex[:8]}",
+            output={
+                "message": "테스트 튜터 응답입니다. 다음 학습으로 짧은 TOEIC 문제를 풀어보세요.",
+                "detected_intent": "chat",
+                "memory_to_store": [],
+                "suggested_next_actions": ["Part 5 문제 풀기", "Ready Pack 확인"],
+            },
+            usage={},
+        )
     agent = build_tutor_agent(model)
     deps = TutorDeps(user_id=request.user_id, store=store)
     session_id = request.session_id or uuid4().hex
@@ -47,6 +59,15 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
 
 
 async def generate_quiz(*, model, store: SqliteStore, request: QuizGenerateRequest) -> QuizGenerateResponse:
+    if model == "test":
+        quiz_id = uuid4().hex
+        pack = build_seed_ready_pack(
+            topic=request.topic,
+            mode=request.mode,
+            difficulty=request.difficulty,
+        )
+        await store.save_quiz_pack(request.user_id, quiz_id, pack)
+        return QuizGenerateResponse(quiz_id=quiz_id, pack=pack)
     agent = build_quiz_agent(model)
     deps = ContentDeps(user_id=request.user_id, store=store)
     prompt = (

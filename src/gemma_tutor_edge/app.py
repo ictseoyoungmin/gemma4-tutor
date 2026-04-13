@@ -7,10 +7,12 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
+from .harness.runner import execute_harness
 from .llm import build_model
 from .schemas import (
     ChatRequest,
     HealthResponse,
+    HarnessRunRequest,
     ProblemGenerationRequest,
     QueueJobRequest,
     ReadyPackLaunchRequest,
@@ -187,6 +189,14 @@ async def queue_job(request: QueueJobRequest):
 async def problems_generate(request: ProblemGenerationRequest):
     try:
         return await queue_problem_generation(store=store, request=request)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/v1/harness/run")
+async def harness_run(request: HarnessRunRequest):
+    try:
+        return await execute_harness(mode=request.mode, base_url=request.base_url)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

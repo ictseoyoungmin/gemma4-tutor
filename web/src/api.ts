@@ -1,6 +1,7 @@
 import type {
   ChatResponse,
   DashboardDetail,
+  HarnessRunResponse,
   ProblemGenerationResponse,
   ProblemInventoryResponse,
   QuizSubmitResponse,
@@ -117,6 +118,19 @@ export async function queueProblemGeneration(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`Failed to queue problem generation: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function runHarness(mode: "asgi" | "http" = "asgi"): Promise<HarnessRunResponse> {
+  const response = await fetch(`${API_BASE}/v1/harness/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to run harness: ${response.status} ${detail}`);
   }
   return response.json();
 }

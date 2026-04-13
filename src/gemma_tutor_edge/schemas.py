@@ -196,6 +196,25 @@ class WorkerStatusResponse(BaseModel):
     last_exit_code: int | None = None
 
 
+class HarnessCaseResult(BaseModel):
+    case_id: str
+    status_code: int
+    elapsed_ms: float
+    passed: bool
+    body_preview: str
+
+
+class HarnessRunRequest(BaseModel):
+    mode: Literal["asgi", "http"] = "asgi"
+    base_url: str = "http://127.0.0.1:8000"
+
+
+class HarnessRunResponse(BaseModel):
+    passed: int
+    total: int
+    results: list[HarnessCaseResult] = Field(default_factory=list)
+
+
 class ProblemGenerationRequest(BaseModel):
     user_id: str
     part1: int = Field(default=0, ge=0, le=20)

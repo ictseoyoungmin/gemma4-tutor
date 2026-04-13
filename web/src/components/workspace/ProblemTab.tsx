@@ -3,10 +3,11 @@ import {
   fetchProblemInventory,
   fetchWorkerStatus,
   queueProblemGeneration,
+  runHarness,
   startWorker,
   stopWorker,
 } from "../../api";
-import type { ProblemInventoryResponse, WorkerStatusResponse } from "../../types";
+import type { HarnessRunResponse, ProblemInventoryResponse, WorkerStatusResponse } from "../../types";
 
 const partLabels = [
   { key: "part1", label: "Part 1" },
@@ -27,6 +28,7 @@ const difficultyLabel: Record<string, string> = {
 export function ProblemTab({ userId }: { userId: string }) {
   const [inventory, setInventory] = useState<ProblemInventoryResponse | null>(null);
   const [workerStatus, setWorkerStatus] = useState<WorkerStatusResponse | null>(null);
+  const [harnessResult, setHarnessResult] = useState<HarnessRunResponse | null>(null);
   const [status, setStatus] = useState("문제 인벤토리를 불러오는 중...");
   const [readyPackPage, setReadyPackPage] = useState(1);
   const [practiceItemPage, setPracticeItemPage] = useState(1);
@@ -44,6 +46,15 @@ export function ProblemTab({ userId }: { userId: string }) {
     () => Object.values(counts).reduce((sum, value) => sum + value, 0),
     [counts],
   );
+  const queueStatusCounts = useMemo(() => {
+    const initial = { queued: 0, running: 0, done: 0, failed: 0 };
+    for (const job of inventory?.active_jobs ?? []) {
+      if (job.status in initial) {
+        initial[job.status as keyof typeof initial] += 1;
+      }
+    }
+    return initial;
+  }, [inventory]);
 
   useEffect(() => {
     void loadAll();
@@ -83,6 +94,17 @@ export function ProblemTab({ userId }: { userId: string }) {
       setStatus(`${totalRequested}개 Pack 생성 작업을 큐에 추가했습니다.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "문제 생성 요청에 실패했습니다.");
+    }
+  }
+
+  async function handleRunHarness() {
+    try {
+      setStatus("하네스를 실행하는 중...");
+      const result = await runHarness("asgi");
+      setHarnessResult(result);
+      setStatus(`하네스 완료 · ${result.passed}/${result.total} passed`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "하네스 실행에 실패했습니다.");
     }
   }
 
@@ -173,12 +195,39 @@ export function ProblemTab({ userId }: { userId: string }) {
             <button type="button" className="workspace-practice__next" onClick={() => void handleStopWorker()}>
               Worker Off
             </button>
+            <button type="button" className="workspace-practice__next" onClick={() => void handleRunHarness()}>
+              Harness Run
+            </button>
           </div>
 
           <div className="workspace-problem-chip-row">
             {Object.entries(inventory?.stats.practice_items_by_part ?? {}).map(([part, count]) => (
               <div key={part} className="workspace-practice__tag">
                 {part.toUpperCase()} Practice {count}
+              </div>
+            ))}
+          </div>
+
+          <div className="workspace-queue-visual">
+            {[
+              ["queued", "Queued"],
+              ["running", "Running"],
+              ["done", "Done"],
+              ["failed", "Failed"],
+            ].map(([key, label]) => (
+              <div key={key} className="workspace-queue-visual__item">
+                <div className="workspace-queue-visual__row">
+                  <span>{label}</span>
+                  <span>{queueStatusCounts[key as keyof typeof queueStatusCounts]}</span>
+                </div>
+                <div className="workspace-queue-visual__bar">
+                  <div
+                    className={`workspace-queue-visual__fill is-${key}`}
+                    style={{
+                      width: `${Math.min(queueStatusCounts[key as keyof typeof queueStatusCounts] * 24, 100)}%`,
+                    }}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -194,6 +243,24 @@ export function ProblemTab({ userId }: { userId: string }) {
               </div>
             ))}
           </div>
+
+          {harnessResult ? (
+            <div className="workspace-problem-item-list">
+              {harnessResult.results.map((result) => (
+                <div key={result.case_id} className="workspace-problem-item">
+                  <div className="workspace-problem-item__top">
+                    <div className="workspace-pack__name">{result.case_id}</div>
+                    <div className={`workspace-pack__badge ${result.passed ? "is-easy" : "is-hard"}`}>
+                      {result.passed ? "pass" : "fail"}
+                    </div>
+                  </div>
+                  <div className="workspace-pack__meta">
+                    {result.status_code} · {Math.round(result.elapsed_ms)}ms
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </article>
       </div>
 

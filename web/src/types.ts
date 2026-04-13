@@ -102,6 +102,20 @@ export type ProblemGenerationResponse = {
   requested_pack_count: number;
 };
 
+export type HarnessCaseResult = {
+  case_id: string;
+  status_code: number;
+  elapsed_ms: number;
+  passed: boolean;
+  body_preview: string;
+};
+
+export type HarnessRunResponse = {
+  passed: number;
+  total: number;
+  results: HarnessCaseResult[];
+};
+
 export type DashboardDetail = {
   overview: DashboardOverview;
   skill_snapshots: SkillSnapshot[];
