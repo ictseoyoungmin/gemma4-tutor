@@ -897,6 +897,11 @@
   background: var(--bg3);
 }
 
+.workspace-pack.is-active {
+  border-color: var(--a4);
+  background: var(--a6);
+}
+
 .workspace-pack__icon,
 .workspace-module__icon {
   display: flex;
@@ -946,7 +951,8 @@
   color: var(--g1);
 }
 
-.workspace-pack__badge.is-med {
+.workspace-pack__badge.is-med,
+.workspace-pack__badge.is-medium {
   background: var(--a6);
   color: var(--a2);
 }
@@ -1037,6 +1043,122 @@
 .workspace-consistency__copy {
   font-size: 11px;
   line-height: 1.6;
+}
+
+.workspace-ready-pack {
+  padding: 18px;
+}
+
+.workspace-ready-pack__subcopy,
+.workspace-ready-pack__summary,
+.workspace-ready-pack__meta-line,
+.workspace-ready-pack__empty,
+.workspace-ready-pack__feedback {
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.workspace-ready-pack__head-meta,
+.workspace-ready-pack__title-row,
+.workspace-ready-pack__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspace-ready-pack__layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.workspace-ready-pack__list,
+.workspace-ready-pack__items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workspace-ready-pack__workspace {
+  min-height: 220px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--b0);
+  background: var(--bg2);
+}
+
+.workspace-ready-pack__title {
+  color: var(--t0);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.workspace-ready-pack__item {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--b0);
+  background: var(--bg1);
+}
+
+.workspace-ready-pack__question {
+  margin-bottom: 10px;
+  color: var(--a0);
+  line-height: 1.6;
+}
+
+.workspace-ready-pack__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-ready-pack__choice {
+  padding: 8px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--b1);
+  background: transparent;
+  color: var(--t1);
+  cursor: pointer;
+  font: inherit;
+}
+
+.workspace-ready-pack__choice.is-selected {
+  border-color: var(--a4);
+  background: var(--a6);
+  color: var(--a1);
+}
+
+.workspace-ready-pack__textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--b1);
+  background: var(--bg3);
+  color: var(--t1);
+  font: inherit;
+  resize: vertical;
+}
+
+.workspace-ready-pack__feedback {
+  margin-top: 10px;
+}
+
+.workspace-ready-pack__score {
+  color: var(--a1);
+  font-weight: 600;
+}
+
+.workspace-ready-pack__refresh {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--b1);
+  background: transparent;
+  color: var(--t1);
+  font: inherit;
+  cursor: pointer;
 }
 
 .workspace-module__desc,
@@ -1432,6 +1554,7 @@
 
   .workspace-progress-row,
   .workspace-practice__options,
+  .workspace-ready-pack__layout,
   .workspace-media-grid,
   .workspace-modules,
   .workspace-hero__stats {

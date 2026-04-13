@@ -11,6 +11,8 @@ from .schemas import (
     ImageAnalysisResponse,
     QueueJobRequest,
     QueueJobResponse,
+    ReadyPackLaunchRequest,
+    ReadyPackLaunchResponse,
     QuizGenerateRequest,
     QuizGenerateResponse,
     QuizSubmitRequest,
@@ -123,6 +125,25 @@ async def submit_toeic_answer(*, store: SqliteStore, request: ToeicAnswerRequest
         weak_tags=weak_tags,
         recommended_difficulty=next_item.difficulty_level if correct else recommended_difficulty,
         recent_accuracy=recent_accuracy,
+    )
+
+
+async def launch_ready_pack(
+    *,
+    store: SqliteStore,
+    ready_pack_id: str,
+    request: ReadyPackLaunchRequest,
+) -> ReadyPackLaunchResponse:
+    ready_pack = await store.get_ready_pack(request.user_id, ready_pack_id)
+    if ready_pack is None:
+        raise ValueError(f"Ready pack {ready_pack_id} was not found")
+
+    quiz_id = uuid4().hex
+    await store.save_quiz_pack(request.user_id, quiz_id, ready_pack.pack)
+    return ReadyPackLaunchResponse(
+        ready_pack_id=ready_pack_id,
+        quiz_id=quiz_id,
+        pack=ready_pack.pack,
     )
 
 

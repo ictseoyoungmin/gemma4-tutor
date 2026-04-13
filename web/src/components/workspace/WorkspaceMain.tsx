@@ -3,19 +3,10 @@ import {
   heroTags,
   practiceModules,
   queueItems,
-  readyPacks,
   skillProgress,
 } from "./workspaceData";
 import { PracticePanel } from "./PracticePanel";
-
-function PackIcon() {
-  return (
-    <svg className="icon-pack" viewBox="0 0 24 24">
-      <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-    </svg>
-  );
-}
+import { ReadyPackPanel } from "./ReadyPackPanel";
 
 function ModuleIcon({ variant }: { variant: string }) {
   if (variant === "primary") {
@@ -108,6 +99,7 @@ export function WorkspaceMain({ userId }: { userId: string }) {
       </section>
 
       <PracticePanel userId={userId} />
+      <ReadyPackPanel userId={userId} />
 
       <section className="workspace-progress-row workspace-fade-in">
         <article className="workspace-panel">
@@ -134,24 +126,11 @@ export function WorkspaceMain({ userId }: { userId: string }) {
         <article className="workspace-panel">
           <div className="workspace-panel__head">
             <div className="workspace-panel__title">Ready Pack</div>
-            <div className="workspace-panel__metric">5개 준비됨</div>
+            <div className="workspace-panel__metric">실행 패널로 이동</div>
           </div>
 
-          <div className="workspace-pack-list">
-            {readyPacks.map((pack) => (
-              <button key={pack.name} type="button" className="workspace-pack">
-                <div className="workspace-pack__icon">
-                  <PackIcon />
-                </div>
-                <div className="workspace-pack__body">
-                  <div className="workspace-pack__name">{pack.name}</div>
-                  <div className="workspace-pack__meta">{pack.meta}</div>
-                </div>
-                <div className={`workspace-pack__badge is-${pack.difficulty}`}>
-                  {pack.difficulty === "easy" ? "쉬움" : pack.difficulty === "med" ? "보통" : "어려움"}
-                </div>
-              </button>
-            ))}
+          <div className="workspace-ready-pack__summary">
+            Ready Pack은 이제 위 실행 패널에서 실제로 열어서 답안을 제출할 수 있습니다.
           </div>
         </article>
       </section>

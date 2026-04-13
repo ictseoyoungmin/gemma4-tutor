@@ -1,4 +1,12 @@
-import type { ChatResponse, DashboardDetail, ToeicAnswerResponse, ToeicNextResponse } from "./types";
+import type {
+  ChatResponse,
+  DashboardDetail,
+  QuizSubmitResponse,
+  ReadyPackLaunchResponse,
+  ReadyQuizSummary,
+  ToeicAnswerResponse,
+  ToeicNextResponse,
+} from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -26,6 +34,14 @@ export async function queuePrebuildJob(userId: string, topic: string) {
   return response.json();
 }
 
+export async function fetchReadyPacks(userId: string): Promise<ReadyQuizSummary[]> {
+  const response = await fetch(`${API_BASE}/v1/packs/ready/${userId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ready packs: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function sendChatMessage(
   userId: string,
   message: string,
@@ -43,6 +59,43 @@ export async function sendChatMessage(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`Failed to send chat message: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function launchReadyPack(
+  userId: string,
+  readyPackId: string,
+): Promise<ReadyPackLaunchResponse> {
+  const response = await fetch(`${API_BASE}/v1/packs/ready/${readyPackId}/launch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to launch ready pack: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function submitQuizAnswers(
+  userId: string,
+  quizId: string,
+  answers: string[],
+): Promise<QuizSubmitResponse> {
+  const response = await fetch(`${API_BASE}/v1/quiz/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      quiz_id: quizId,
+      answers,
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to submit quiz: ${response.status} ${detail}`);
   }
   return response.json();
 }

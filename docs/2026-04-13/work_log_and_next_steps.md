@@ -234,6 +234,54 @@ Verified:
 - backend tests pass: `8 passed`
 - frontend production build succeeds with the new practice panel
 
+### 13. Ready Pack launcher follow-up
+
+Implemented the next recommended learner-workspace follow-up:
+
+- added a launch path from stored ready packs into a live quiz session,
+- reused the existing quiz submission route for launched ready packs,
+- replaced the workspace's static ready-pack list with live backend data,
+- added an in-workspace ready-pack solving panel with immediate score and feedback.
+
+Added or updated:
+
+- `src/gemma_tutor_edge/schemas.py`
+- `src/gemma_tutor_edge/services.py`
+- `src/gemma_tutor_edge/storage.py`
+- `src/gemma_tutor_edge/app.py`
+- `tests/test_worker_queue.py`
+- `web/src/api.ts`
+- `web/src/types.ts`
+- `web/src/components/workspace/ReadyPackPanel.tsx`
+- `web/src/components/workspace/WorkspaceMain.tsx`
+- `web/src/components/workspace/workspace.css`
+
+Verified:
+
+- backend tests still pass: `8 passed`
+- frontend production build still succeeds
+
+### 14. Ready Pack generation quality follow-up
+
+Improved the background prebuild path so it no longer creates obvious placeholder packs.
+
+Implemented:
+
+- a seed-backed ready-pack generator for TOEIC and grammar modes,
+- deterministic validation for quiz-pack structure,
+- worker-side LLM attempt plus validation plus fallback behavior,
+- generation metadata in worker results so the prebuild path is more auditable.
+
+Added or updated:
+
+- `src/gemma_tutor_edge/jobs.py`
+- `tests/test_worker_queue.py`
+
+Verified:
+
+- backend tests still pass: `8 passed`
+- frontend production build still succeeds
+
 ## Current State
 
 The project can now be described like this:
@@ -250,7 +298,8 @@ The project can now be described like this:
 
 ### High priority product work
 
-- Show ready quiz packs as launchable study actions rather than only dashboard summaries.
+- Add persistence and UI for ready-pack generation metadata and audit traces.
+- Expand the prebuild path from seed-backed packs to richer TOEIC-specialized pack generation.
 
 ### Backend domain work
 

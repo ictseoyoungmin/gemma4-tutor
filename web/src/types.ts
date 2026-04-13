@@ -29,6 +29,27 @@ export type ReadyQuizSummary = {
   created_at: string;
 };
 
+export type QuizItem = {
+  prompt: string;
+  choices: string[];
+  answer: string;
+  explanation: string;
+  skill_tags: string[];
+};
+
+export type QuizPack = {
+  title: string;
+  mode: "toeic" | "grammar" | "conversation" | "image" | "idiom";
+  difficulty: "easy" | "medium" | "hard";
+  items: QuizItem[];
+};
+
+export type ReadyPackLaunchResponse = {
+  ready_pack_id: string;
+  quiz_id: string;
+  pack: QuizPack;
+};
+
 export type BackgroundJob = {
   job_id: string;
   user_id: string;
@@ -67,6 +88,14 @@ export type ChatResponse = {
   run_id: string;
   output: TutorResponse;
   usage: Record<string, unknown>;
+};
+
+export type QuizSubmitResponse = {
+  quiz_id: string;
+  total: number;
+  correct: number;
+  feedback: string[];
+  score: number;
 };
 
 export type ToeicPracticeItem = {

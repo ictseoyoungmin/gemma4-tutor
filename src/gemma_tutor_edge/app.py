@@ -11,6 +11,7 @@ from .schemas import (
     ChatRequest,
     HealthResponse,
     QueueJobRequest,
+    ReadyPackLaunchRequest,
     ToeicAnswerRequest,
     ToeicNextRequest,
     QuizGenerateRequest,
@@ -21,6 +22,7 @@ from .services import (
     generate_quiz,
     get_toeic_next_item,
     handle_chat,
+    launch_ready_pack,
     queue_background_job,
     submit_toeic_answer,
     submit_quiz,
@@ -122,6 +124,16 @@ async def dashboard_detail(user_id: str):
 async def ready_packs(user_id: str):
     try:
         return await store.list_ready_packs(user_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/v1/packs/ready/{ready_pack_id}/launch")
+async def ready_pack_launch(ready_pack_id: str, request: ReadyPackLaunchRequest):
+    try:
+        return await launch_ready_pack(store=store, ready_pack_id=ready_pack_id, request=request)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

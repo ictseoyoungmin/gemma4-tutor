@@ -180,6 +180,21 @@ class ReadyQuizSummary(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class ReadyPackDetail(BaseModel):
+    ready_pack_id: str
+    pack: QuizPack
+
+
+class ReadyPackLaunchRequest(BaseModel):
+    user_id: str
+
+
+class ReadyPackLaunchResponse(BaseModel):
+    ready_pack_id: str
+    quiz_id: str
+    pack: QuizPack
+
+
 class DashboardOverview(BaseModel):
     user_id: str
     memory_count: int

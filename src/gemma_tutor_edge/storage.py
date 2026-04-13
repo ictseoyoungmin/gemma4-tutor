@@ -14,6 +14,7 @@ from .schemas import (
     DashboardOverview,
     MemoryItem,
     QuizPack,
+    ReadyPackDetail,
     ReadyQuizSummary,
     SkillSnapshot,
     ToeicPracticeItem,
@@ -281,6 +282,24 @@ class SqliteStore:
             )
             for row in rows
         ]
+
+    async def get_ready_pack(self, user_id: str, ready_pack_id: str) -> ReadyPackDetail | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT payload_json
+                FROM ready_packs
+                WHERE user_id = ? AND ready_pack_id = ?
+                """,
+                (user_id, ready_pack_id),
+            )
+            row = await cursor.fetchone()
+        if not row:
+            return None
+        return ReadyPackDetail(
+            ready_pack_id=ready_pack_id,
+            pack=QuizPack.model_validate_json(row[0]),
+        )
 
     async def save_attempt(
         self,
