@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   heroStats,
   heroTags,
@@ -7,6 +8,8 @@ import {
 } from "./workspaceData";
 import { PracticePanel } from "./PracticePanel";
 import { ReadyPackPanel } from "./ReadyPackPanel";
+
+type ActiveModule = "dashboard" | "toeic-practice" | "writing-lab" | "ready-pack";
 
 function ModuleIcon({ variant }: { variant: string }) {
   if (variant === "primary") {
@@ -66,6 +69,49 @@ function MediaAudioPlaceholder() {
 }
 
 export function WorkspaceMain({ userId }: { userId: string }) {
+  const [activeModule, setActiveModule] = useState<ActiveModule>("dashboard");
+
+  function renderActiveModule() {
+    if (activeModule === "toeic-practice") {
+      return <PracticePanel userId={userId} />;
+    }
+
+    if (activeModule === "ready-pack") {
+      return <ReadyPackPanel userId={userId} />;
+    }
+
+    if (activeModule === "writing-lab") {
+      return (
+        <section className="workspace-panel workspace-module-stage workspace-module-stage--placeholder">
+          <div className="workspace-panel__head">
+            <div>
+              <div className="workspace-panel__title">Writing Lab</div>
+              <div className="workspace-module-stage__subcopy">
+                작문 교정 모듈은 다음 단계에서 실제 첨삭 플로우로 연결됩니다.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="workspace-module-stage__close"
+              onClick={() => setActiveModule("dashboard")}
+            >
+              대시보드로
+            </button>
+          </div>
+
+          <div className="workspace-module-stage__placeholder">
+            <div className="workspace-module-stage__placeholder-title">Writing correction workspace</div>
+            <div className="workspace-module-stage__placeholder-copy">
+              문장을 입력하고 교정 결과, 더 자연스러운 재작성, 짧은 규칙 설명을 한 번에 보여주는 전용 패널이 들어올 자리입니다.
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    return null;
+  }
+
   return (
     <main className="workspace-main">
       <section className="workspace-hero workspace-fade-in">
@@ -98,9 +144,6 @@ export function WorkspaceMain({ userId }: { userId: string }) {
         </div>
       </section>
 
-      <PracticePanel userId={userId} />
-      <ReadyPackPanel userId={userId} />
-
       <section className="workspace-progress-row workspace-fade-in">
         <article className="workspace-panel">
           <div className="workspace-panel__head">
@@ -126,11 +169,11 @@ export function WorkspaceMain({ userId }: { userId: string }) {
         <article className="workspace-panel">
           <div className="workspace-panel__head">
             <div className="workspace-panel__title">Ready Pack</div>
-            <div className="workspace-panel__metric">실행 패널로 이동</div>
+            <div className="workspace-panel__metric">필요할 때 모듈에서 실행</div>
           </div>
 
           <div className="workspace-ready-pack__summary">
-            Ready Pack은 이제 위 실행 패널에서 실제로 열어서 답안을 제출할 수 있습니다.
+            첫 화면은 학습 대시보드처럼 유지하고, Ready Pack은 아래 연습 모듈에서 선택했을 때 중앙 공간에만 열립니다.
           </div>
         </article>
       </section>
@@ -145,7 +188,12 @@ export function WorkspaceMain({ userId }: { userId: string }) {
 
         <div className="workspace-modules">
           {practiceModules.map((module) => (
-            <button key={module.title} type="button" className={`workspace-module is-${module.variant}`}>
+            <button
+              key={module.title}
+              type="button"
+              className={`workspace-module is-${module.variant}${activeModule === module.id ? " is-active" : ""}`}
+              onClick={() => setActiveModule(module.id as ActiveModule)}
+            >
               {module.badge ? <div className="workspace-module__badge">{module.badge}</div> : null}
               <div className={`workspace-module__icon is-${module.variant}`}>
                 <ModuleIcon variant={module.variant} />
@@ -157,6 +205,22 @@ export function WorkspaceMain({ userId }: { userId: string }) {
           ))}
         </div>
       </section>
+
+      {activeModule !== "dashboard" ? (
+        <section className="workspace-fade-in">
+          <div className="workspace-section-head">
+            <div className="workspace-section-head__label">선택한 연습 모듈</div>
+            <button
+              type="button"
+              className="workspace-section-head__action"
+              onClick={() => setActiveModule("dashboard")}
+            >
+              닫기 →
+            </button>
+          </div>
+          {renderActiveModule()}
+        </section>
+      ) : null}
 
       <section className="workspace-fade-in">
         <div className="workspace-section-head">

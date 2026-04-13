@@ -23,17 +23,20 @@ export const readyPacks = [
 
 export const practiceModules = [
   {
+    id: "toeic-practice",
     title: "다음 학습 과제",
     description: "튜터에게 맞춤형 TOEIC 문제 또는 학습 태스크를 요청합니다.",
     badge: "추천",
     variant: "primary",
   },
   {
+    id: "writing-lab",
     title: "작문 교정",
     description: "문장을 입력하고 즉각적인 교정과 상세 설명을 받아보세요.",
     variant: "slate",
   },
   {
+    id: "ready-pack",
     title: "Ready Pack 실행",
     description: "저장된 퀴즈 팩으로 집중 모드 학습을 시작합니다.",
     variant: "green",
