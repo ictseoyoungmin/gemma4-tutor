@@ -3,7 +3,17 @@ import re
 
 import pytest
 
-from gemma_tutor_edge.jobs import enqueue_prebuild_job, enqueue_problem_generation_job, process_job
+import gemma_tutor_edge.jobs as jobs_module
+from gemma_tutor_edge.jobs import (
+    build_pack_from_template,
+    build_seed_ready_pack,
+    enqueue_prebuild_job,
+    enqueue_problem_generation_job,
+    process_job,
+    validate_quiz_pack,
+)
+from gemma_tutor_edge.harness.runner import validate_generated_pack
+from gemma_tutor_edge.schemas import QuizItem, QuizPack
 from gemma_tutor_edge.schemas import ReadyPackLaunchRequest
 from gemma_tutor_edge.services import launch_ready_pack
 from gemma_tutor_edge.storage import SqliteStore
@@ -90,3 +100,144 @@ async def test_worker_avoids_duplicate_titles_across_multiple_generation_batches
     ready = await store.list_ready_packs("u1", limit=10)
     titles = [pack.title for pack in ready]
     assert len(titles) == len(set(titles))
+
+
+class _FakeAgentResult:
+    def __init__(self, output: QuizPack):
+        self.output = output
+
+
+class _FakeAgent:
+    def __init__(self, *, output: QuizPack | None = None, error: Exception | None = None):
+        self.output = output
+        self.error = error
+
+    async def run(self, prompt: str, deps):  # noqa: ANN001
+        if self.error is not None:
+            raise self.error
+        assert self.output is not None
+        return _FakeAgentResult(self.output)
+
+
+@pytest.mark.asyncio
+async def test_problem_set_invalid_llm_output_uses_template_fallback_when_saving(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = SqliteStore(tmp_path / "invalid-fallback.db")
+    await store.init()
+
+    invalid_pack = QuizPack(
+        title="ignored",
+        mode="toeic",
+        difficulty="easy",
+        items=[
+            QuizItem(
+                prompt="구매팀은 오늘 공급업체 목록을 검토합니다.",
+                choices=["review", "reviews", "reviewed", "reviewing"],
+                answer="review",
+                explanation="설명은 한국어입니다.",
+                skill_tags=["toeic", "part5"],
+            ),
+            QuizItem(
+                prompt="이 문항도 한국어로 되어 있습니다.",
+                choices=["a", "b", "c", "d"],
+                answer="a",
+                explanation="설명은 한국어입니다.",
+                skill_tags=["toeic", "part5"],
+            ),
+            QuizItem(
+                prompt="세 번째 문항도 영어 규칙을 어깁니다.",
+                choices=["a", "b", "c", "d"],
+                answer="a",
+                explanation="설명은 한국어입니다.",
+                skill_tags=["toeic", "part5"],
+            ),
+        ],
+    )
+    monkeypatch.setattr(jobs_module, "build_quiz_agent", lambda model: _FakeAgent(output=invalid_pack))
+
+    job = await enqueue_problem_generation_job(
+        store,
+        user_id="u1",
+        part_counts={"part5": 1},
+    )
+    result = await process_job(store=store, model="fake-model", job=job)
+
+    ready_pack = await store.get_ready_pack("u1", result["created_pack_ids"][0])
+    assert ready_pack is not None
+    assert ready_pack.pack.title == "Part 5 핵심 문법 10선"
+    assert ready_pack.generation is not None
+    assert ready_pack.generation.strategy == "llm_invalid_fallback"
+    assert "item_0_prompt_not_english" in ready_pack.generation.validation_errors
+    assert len(ready_pack.pack.items) == 10
+    assert ready_pack.pack.items[0].prompt != build_seed_ready_pack(
+        topic="seed",
+        mode="toeic",
+        difficulty="easy",
+    ).items[0].prompt
+
+
+@pytest.mark.asyncio
+async def test_problem_set_llm_error_uses_template_fallback_when_saving(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = SqliteStore(tmp_path / "error-fallback.db")
+    await store.init()
+
+    monkeypatch.setattr(
+        jobs_module,
+        "build_quiz_agent",
+        lambda model: _FakeAgent(error=RuntimeError("synthetic llm failure")),
+    )
+
+    job = await enqueue_problem_generation_job(
+        store,
+        user_id="u1",
+        part_counts={"part2": 1},
+    )
+    result = await process_job(store=store, model="fake-model", job=job)
+
+    ready_pack = await store.get_ready_pack("u1", result["created_pack_ids"][0])
+    assert ready_pack is not None
+    assert ready_pack.pack.title == "Part 2 응답 패턴 훈련"
+    assert ready_pack.generation is not None
+    assert ready_pack.generation.strategy == "llm_error_fallback"
+    assert ready_pack.generation.error == "synthetic llm failure"
+    assert len(ready_pack.pack.items) == 10
+    assert ready_pack.pack.items[0].prompt == "Where is the orientation schedule posted?"
+
+
+def test_template_fallback_packs_are_part_aware_and_valid():
+    part2_pack = build_pack_from_template(
+        {"title": "Part 2 응답 패턴 훈련", "difficulty": "easy", "item_count": 10},
+        "part2",
+        1,
+    )
+    part5_pack = build_pack_from_template(
+        {"title": "Part 5 핵심 문법 10선", "difficulty": "easy", "item_count": 10},
+        "part5",
+        1,
+    )
+    part7_pack = build_pack_from_template(
+        {"title": "Part 7 독해 지문 분석", "difficulty": "medium", "item_count": 20},
+        "part7",
+        1,
+    )
+
+    assert part2_pack.items[0].prompt == "Where is the orientation schedule posted?"
+    assert "Question: What should employees do before Thursday evening?" in part7_pack.items[0].prompt
+    assert "___" in part5_pack.items[0].prompt
+
+    for pack in [part2_pack, part5_pack, part7_pack]:
+        assert validate_quiz_pack(
+            pack,
+            require_english_items=True,
+            require_korean_explanations=True,
+        ) == []
+        assert validate_generated_pack(
+            pack,
+            require_english_items=True,
+            require_korean_explanations=True,
+        )["passed"] is True

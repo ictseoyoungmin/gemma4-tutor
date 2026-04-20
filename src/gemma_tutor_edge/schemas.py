@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def utcnow() -> datetime:
@@ -238,6 +238,16 @@ class ProblemStats(BaseModel):
     ready_packs_by_mode: dict[str, int] = Field(default_factory=dict)
 
 
+class PackGenerationMeta(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    strategy: str = "seed_fallback"
+    validated: bool = False
+    validation_errors: list[str] = Field(default_factory=list)
+    harness: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+
+
 class ProblemInventoryResponse(BaseModel):
     stats: ProblemStats
     ready_packs: list[ReadyQuizSummary] = Field(default_factory=list)
@@ -258,12 +268,14 @@ class ReadyQuizSummary(BaseModel):
     title: str
     mode: Literal["toeic", "grammar", "conversation", "image", "idiom"]
     difficulty: Literal["easy", "medium", "hard"]
+    generation: PackGenerationMeta | None = None
     created_at: datetime = Field(default_factory=utcnow)
 
 
 class ReadyPackDetail(BaseModel):
     ready_pack_id: str
     pack: QuizPack
+    generation: PackGenerationMeta | None = None
 
 
 class PracticeItemDetail(BaseModel):

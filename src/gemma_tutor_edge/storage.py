@@ -13,6 +13,7 @@ from .schemas import (
     DashboardDetail,
     DashboardOverview,
     MemoryItem,
+    PackGenerationMeta,
     PracticeItemDetail,
     ProblemInventoryResponse,
     ProblemStats,
@@ -91,10 +92,15 @@ class SqliteStore:
                     mode TEXT NOT NULL,
                     difficulty TEXT NOT NULL,
                     payload_json TEXT NOT NULL,
+                    generation_json TEXT NULL,
                     created_at TEXT NOT NULL
                 )
                 """
             )
+            cursor = await db.execute("PRAGMA table_info(ready_packs)")
+            ready_pack_columns = {row[1] for row in await cursor.fetchall()}
+            if "generation_json" not in ready_pack_columns:
+                await db.execute("ALTER TABLE ready_packs ADD COLUMN generation_json TEXT NULL")
             await db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS skill_snapshots (
@@ -269,14 +275,32 @@ class SqliteStore:
             return None
         return QuizPack.model_validate_json(row[0])
 
-    async def save_ready_pack(self, user_id: str, ready_pack_id: str, pack: QuizPack, created_at: str) -> None:
+    async def save_ready_pack(
+        self,
+        user_id: str,
+        ready_pack_id: str,
+        pack: QuizPack,
+        created_at: str,
+        generation_meta: dict[str, Any] | None = None,
+    ) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
-                INSERT OR REPLACE INTO ready_packs(ready_pack_id, user_id, title, mode, difficulty, payload_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO ready_packs(
+                    ready_pack_id, user_id, title, mode, difficulty, payload_json, generation_json, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (ready_pack_id, user_id, pack.title, pack.mode, pack.difficulty, pack.model_dump_json(), created_at),
+                (
+                    ready_pack_id,
+                    user_id,
+                    pack.title,
+                    pack.mode,
+                    pack.difficulty,
+                    pack.model_dump_json(),
+                    json.dumps(generation_meta, ensure_ascii=False) if generation_meta is not None else None,
+                    created_at,
+                ),
             )
             await db.commit()
 
@@ -284,7 +308,7 @@ class SqliteStore:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                SELECT ready_pack_id, title, mode, difficulty, created_at
+                SELECT ready_pack_id, title, mode, difficulty, generation_json, created_at
                 FROM ready_packs
                 WHERE user_id = ?
                 ORDER BY created_at DESC
@@ -299,7 +323,8 @@ class SqliteStore:
                 title=row[1],
                 mode=row[2],
                 difficulty=row[3],
-                created_at=row[4],
+                generation=PackGenerationMeta.model_validate_json(row[4]) if row[4] else None,
+                created_at=row[5],
             )
             for row in rows
         ]
@@ -309,7 +334,7 @@ class SqliteStore:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                SELECT ready_pack_id, title, mode, difficulty, created_at
+                SELECT ready_pack_id, title, mode, difficulty, generation_json, created_at
                 FROM ready_packs
                 WHERE user_id = ?
                 ORDER BY created_at DESC
@@ -324,7 +349,8 @@ class SqliteStore:
                 title=row[1],
                 mode=row[2],
                 difficulty=row[3],
-                created_at=row[4],
+                generation=PackGenerationMeta.model_validate_json(row[4]) if row[4] else None,
+                created_at=row[5],
             )
             for row in rows
         ]
@@ -333,7 +359,7 @@ class SqliteStore:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                SELECT payload_json
+                SELECT payload_json, generation_json
                 FROM ready_packs
                 WHERE user_id = ? AND ready_pack_id = ?
                 """,
@@ -345,6 +371,7 @@ class SqliteStore:
         return ReadyPackDetail(
             ready_pack_id=ready_pack_id,
             pack=QuizPack.model_validate_json(row[0]),
+            generation=PackGenerationMeta.model_validate_json(row[1]) if row[1] else None,
         )
 
     async def delete_ready_pack(self, user_id: str, ready_pack_id: str) -> bool:

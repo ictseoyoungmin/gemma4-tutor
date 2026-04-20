@@ -35,3 +35,35 @@ async def test_problem_inventory_detail_and_delete_roundtrip(tmp_path: Path):
 
     assert await store.get_ready_pack("u1", "rp-1") is None
     assert await store.get_practice_item("u1", practice_item.item_id) is None
+
+
+@pytest.mark.asyncio
+async def test_ready_pack_generation_metadata_roundtrip(tmp_path: Path):
+    store = SqliteStore(tmp_path / "ready-pack-generation.db")
+    await store.init()
+
+    ready_pack = build_seed_ready_pack(topic="Part 5 핵심 문법 10선", mode="toeic", difficulty="easy")
+    await store.save_ready_pack(
+        "u1",
+        "rp-meta",
+        ready_pack,
+        created_at="2026-04-20T00:00:00+00:00",
+        generation_meta={
+            "strategy": "llm_invalid_fallback",
+            "validated": True,
+            "validation_errors": ["item_0_prompt_not_english"],
+            "error": None,
+            "harness": {"passed": False, "failures": ["item_0_prompt_not_english"], "item_count": 3},
+        },
+    )
+
+    inventory = await store.problem_inventory("u1")
+    assert inventory.ready_packs[0].generation is not None
+    assert inventory.ready_packs[0].generation.strategy == "llm_invalid_fallback"
+    assert inventory.ready_packs[0].generation.validation_errors == ["item_0_prompt_not_english"]
+
+    ready_detail = await store.get_ready_pack("u1", "rp-meta")
+    assert ready_detail is not None
+    assert ready_detail.generation is not None
+    assert ready_detail.generation.strategy == "llm_invalid_fallback"
+    assert ready_detail.generation.harness["passed"] is False

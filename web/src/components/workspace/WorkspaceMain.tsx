@@ -127,12 +127,12 @@ export function WorkspaceMain({ userId, activeTab }: { userId: string; activeTab
         </div>
 
         <div className="workspace-hero__eyebrow">Learner Workspace</div>
-        <h2 className="workspace-hero__title">
+        {/* <h2 className="workspace-hero__title">
           집중 <em>학습 플로우</em>
         </h2>
         <p className="workspace-hero__copy">
           튜터 채팅, 문제 풀기, 설명 확인까지 한 화면에서 끊김 없이 이어지는 학습 경험.
-        </p>
+        </p> */}
 
         <div className="workspace-hero__stats">
           {heroStats.map((item) => (

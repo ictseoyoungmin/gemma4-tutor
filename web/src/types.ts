@@ -26,6 +26,7 @@ export type ReadyQuizSummary = {
   title: string;
   mode: string;
   difficulty: string;
+  generation?: PackGenerationMeta | null;
   created_at: string;
 };
 
@@ -43,6 +44,7 @@ export type PracticeItemSummary = {
 export type ReadyPackDetail = {
   ready_pack_id: string;
   pack: QuizPack;
+  generation?: PackGenerationMeta | null;
 };
 
 export type PracticeItemDetail = {
@@ -96,6 +98,14 @@ export type ProblemStats = {
   total_practice_items: number;
   practice_items_by_part: Record<string, number>;
   ready_packs_by_mode: Record<string, number>;
+};
+
+export type PackGenerationMeta = {
+  strategy: string;
+  validated: boolean;
+  validation_errors: string[];
+  harness: Record<string, unknown>;
+  error?: string | null;
 };
 
 export type ProblemInventoryResponse = {

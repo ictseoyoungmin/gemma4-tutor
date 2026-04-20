@@ -35,6 +35,30 @@ const difficultyLabel: Record<string, string> = {
   hard: "어려움",
 };
 
+const strategyLabel: Record<string, string> = {
+  llm: "LLM 생성",
+  seed_fallback: "Seed Fallback",
+  llm_invalid_fallback: "검증 실패 Fallback",
+  llm_error_fallback: "오류 Fallback",
+};
+
+function getStrategyTone(strategy?: string | null) {
+  if (strategy === "llm") {
+    return "easy";
+  }
+  if (strategy === "llm_invalid_fallback" || strategy === "llm_error_fallback") {
+    return "hard";
+  }
+  return "medium";
+}
+
+function getStrategyLabel(strategy?: string | null) {
+  if (!strategy) {
+    return "미기록";
+  }
+  return strategyLabel[strategy] ?? strategy;
+}
+
 export function ProblemTab({ userId }: { userId: string }) {
   const [inventory, setInventory] = useState<ProblemInventoryResponse | null>(null);
   const [workerStatus, setWorkerStatus] = useState<WorkerStatusResponse | null>(null);
@@ -71,6 +95,24 @@ export function ProblemTab({ userId }: { userId: string }) {
   const runningRatio = queueTotal > 0 ? (queueStatusCounts.running / queueTotal) * 100 : 0;
   const queuedRatio = queueTotal > 0 ? (queueStatusCounts.queued / queueTotal) * 100 : 0;
   const failedHarnessCases = harnessResult?.results.filter((result) => !result.passed) ?? [];
+  const generationStrategyCounts = useMemo(() => {
+    const countsByStrategy: Record<string, number> = {};
+    for (const pack of inventory?.ready_packs ?? []) {
+      const strategy = pack.generation?.strategy ?? "unknown";
+      countsByStrategy[strategy] = (countsByStrategy[strategy] ?? 0) + 1;
+    }
+    return countsByStrategy;
+  }, [inventory]);
+  const fallbackReadyPackCount = useMemo(
+    () =>
+      (inventory?.ready_packs ?? []).filter((pack) => {
+        const strategy = pack.generation?.strategy;
+        return strategy != null && strategy !== "llm";
+      }).length,
+    [inventory],
+  );
+  const selectedReadyPackFailures = selectedReadyPack?.generation?.validation_errors ?? [];
+  const selectedReadyPackHarnessPassed = selectedReadyPack?.generation?.harness?.passed;
 
   useEffect(() => {
     void loadAll();
@@ -275,6 +317,11 @@ export function ProblemTab({ userId }: { userId: string }) {
                 {part.toUpperCase()} Practice {count}
               </div>
             ))}
+            {Object.entries(generationStrategyCounts).map(([strategy, count]) => (
+              <div key={strategy} className="workspace-practice__tag">
+                {getStrategyLabel(strategy)} {count}
+              </div>
+            ))}
           </div>
 
           <div className="workspace-queue-visual">
@@ -301,14 +348,24 @@ export function ProblemTab({ userId }: { userId: string }) {
 
             <div className="workspace-queue-visual__item">
               <div className="workspace-queue-visual__row">
-                <span>Failed</span>
-                <span>{queueStatusCounts.failed}</span>
+                <span>Fallback Packs</span>
+                <span>{fallbackReadyPackCount}</span>
               </div>
               <div className="workspace-queue-visual__bar">
                 <div
                   className="workspace-queue-visual__fill is-failed"
-                  style={{ width: `${Math.min(queueStatusCounts.failed * 24, 100)}%` }}
+                  style={{
+                    width: `${Math.min(
+                      inventory?.stats.total_ready_packs
+                        ? (fallbackReadyPackCount / inventory.stats.total_ready_packs) * 100
+                        : 0,
+                      100,
+                    )}%`,
+                  }}
                 />
+              </div>
+              <div className="workspace-queue-visual__legend">
+                <span className="workspace-queue-legend is-queued">Worker Failed Jobs {queueStatusCounts.failed}</span>
               </div>
             </div>
           </div>
@@ -385,8 +442,14 @@ export function ProblemTab({ userId }: { userId: string }) {
                   <div className="workspace-pack__meta">
                     {pack.mode.toUpperCase()} · {new Date(pack.created_at).toLocaleDateString()}
                   </div>
+                  <div className="workspace-pack__meta">
+                    {getStrategyLabel(pack.generation?.strategy)} · validation {pack.generation?.validation_errors.length ?? 0}
+                  </div>
                 </div>
                 <div className="workspace-problem-row-actions">
+                  <div className={`workspace-pack__badge is-${getStrategyTone(pack.generation?.strategy)}`}>
+                    {getStrategyLabel(pack.generation?.strategy)}
+                  </div>
                   <div className={`workspace-pack__badge is-${pack.difficulty}`}>
                     {difficultyLabel[pack.difficulty] ?? pack.difficulty}
                   </div>
@@ -502,8 +565,29 @@ export function ProblemTab({ userId }: { userId: string }) {
                   <div className="workspace-ready-pack__meta-line">
                     {selectedReadyPack.pack.mode} · {difficultyLabel[selectedReadyPack.pack.difficulty] ?? selectedReadyPack.pack.difficulty} · {selectedReadyPack.pack.items.length}문항
                   </div>
+                  <div className="workspace-ready-pack__meta-line">
+                    {getStrategyLabel(selectedReadyPack.generation?.strategy)} · validation {selectedReadyPackFailures.length} · harness{" "}
+                    {selectedReadyPackHarnessPassed === true ? "pass" : selectedReadyPackHarnessPassed === false ? "fail" : "-"}
+                  </div>
                 </div>
               </div>
+              {selectedReadyPack.generation ? (
+                <div className="workspace-problem-failure-list">
+                  <div className="workspace-problem-failure">
+                    <div className="workspace-problem-failure__title">Generation Metadata</div>
+                    <div className="workspace-problem-failure__copy">
+                      strategy: {selectedReadyPack.generation.strategy}
+                      {selectedReadyPack.generation.error ? ` · error: ${selectedReadyPack.generation.error}` : ""}
+                    </div>
+                  </div>
+                  {selectedReadyPackFailures.slice(0, 3).map((failure) => (
+                    <div key={failure} className="workspace-problem-failure">
+                      <div className="workspace-problem-failure__title">validation failure</div>
+                      <div className="workspace-problem-failure__copy">{failure}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="workspace-ready-pack__items">
                 {selectedReadyPack.pack.items.slice(0, 5).map((item, index) => (
                   <div key={`${selectedReadyPack.ready_pack_id}-${index}`} className="workspace-ready-pack__item">
