@@ -5,6 +5,7 @@ import pytest
 
 import gemma_tutor_edge.jobs as jobs_module
 from gemma_tutor_edge.jobs import (
+    build_part5_practice_item,
     build_pack_from_template,
     build_seed_ready_pack,
     enqueue_prebuild_job,
@@ -176,6 +177,13 @@ async def test_problem_set_invalid_llm_output_uses_template_fallback_when_saving
         mode="toeic",
         difficulty="easy",
     ).items[0].prompt
+    inventory = await store.problem_inventory("u1")
+    assert inventory.practice_items[0].source == "seed"
+    practice_detail = await store.get_practice_item("u1", inventory.practice_items[0].item_id)
+    assert practice_detail is not None
+    expected_seed_item = build_part5_practice_item(0, "easy")
+    assert practice_detail.item.question_text == expected_seed_item.question_text
+    assert practice_detail.item.grammar_tag == expected_seed_item.grammar_tag
 
 
 @pytest.mark.asyncio
@@ -207,6 +215,65 @@ async def test_problem_set_llm_error_uses_template_fallback_when_saving(
     assert ready_pack.generation.error == "synthetic llm failure"
     assert len(ready_pack.pack.items) == 10
     assert ready_pack.pack.items[0].prompt == "Where is the orientation schedule posted?"
+
+
+@pytest.mark.asyncio
+async def test_problem_set_valid_llm_output_uses_pack_derived_practice_item(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = SqliteStore(tmp_path / "valid-llm-practice.db")
+    await store.init()
+
+    valid_pack = QuizPack(
+        title="ignored",
+        mode="toeic",
+        difficulty="easy",
+        items=[
+            QuizItem(
+                prompt="The office manager will ___ the revised seating chart this afternoon.",
+                choices=["review", "reviews", "reviewed", "reviewing"],
+                answer="review",
+                explanation="'will' 뒤에는 동사원형이 와야 하므로 'review'가 정답입니다.",
+                skill_tags=["toeic", "part5", "grammar"],
+            ),
+            QuizItem(
+                prompt="All applicants must submit identification ___ the interview begins.",
+                choices=["before", "during", "among", "unless"],
+                answer="before",
+                explanation="면접 시작 이전 시점을 나타내므로 'before'가 자연스럽습니다.",
+                skill_tags=["toeic", "part5", "preposition"],
+            ),
+            QuizItem(
+                prompt="The report was written so ___ that the client approved it immediately.",
+                choices=["clearly", "clear", "clearness", "cleared"],
+                answer="clearly",
+                explanation="동사 was written을 수식하는 부사가 필요하므로 'clearly'가 맞습니다.",
+                skill_tags=["toeic", "part5", "adverb"],
+            ),
+        ],
+    )
+    monkeypatch.setattr(jobs_module, "build_quiz_agent", lambda model: _FakeAgent(output=valid_pack))
+
+    job = await enqueue_problem_generation_job(
+        store,
+        user_id="u1",
+        part_counts={"part5": 1},
+    )
+    result = await process_job(store=store, model="fake-model", job=job)
+
+    ready_pack = await store.get_ready_pack("u1", result["created_pack_ids"][0])
+    assert ready_pack is not None
+    assert ready_pack.generation is not None
+    assert ready_pack.generation.strategy == "llm"
+
+    inventory = await store.problem_inventory("u1")
+    assert inventory.practice_items[0].source == "worker_generated"
+    practice_detail = await store.get_practice_item("u1", inventory.practice_items[0].item_id)
+    assert practice_detail is not None
+    assert practice_detail.item.question_text == valid_pack.items[0].prompt
+    assert practice_detail.item.correct_option == valid_pack.items[0].answer
+    assert practice_detail.item.grammar_tag == "worker_generated_part5"
 
 
 def test_template_fallback_packs_are_part_aware_and_valid():

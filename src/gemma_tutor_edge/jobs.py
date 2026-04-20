@@ -204,6 +204,18 @@ def build_practice_item_from_pack(pack: QuizPack, difficulty: str, index: int) -
     return build_part5_practice_item(index, difficulty)
 
 
+def build_part5_practice_item_for_strategy(
+    *,
+    pack: QuizPack,
+    difficulty: str,
+    index: int,
+    strategy: str,
+) -> tuple[ToeicPracticeItem, str]:
+    if strategy == "llm":
+        return build_practice_item_from_pack(pack, difficulty, index), "worker_generated"
+    return build_part5_practice_item(index, difficulty), "seed"
+
+
 def get_template_example_bank(part_type: str) -> list[tuple[str, list[str], str, str]]:
     if part_type == "part2":
         return [
@@ -604,11 +616,16 @@ async def process_job(*, store: SqliteStore, model, job: BackgroundJob) -> dict:
                 created_pack_ids.append(ready_pack_id)
 
                 if part_type == "part5":
-                    practice_item = build_practice_item_from_pack(pack, difficulty, index)
+                    practice_item, practice_source = build_part5_practice_item_for_strategy(
+                        pack=pack,
+                        difficulty=difficulty,
+                        index=index,
+                        strategy=str(generation_meta["strategy"]),
+                    )
                     await store.save_practice_item(
                         user_id=job.user_id,
                         item=practice_item,
-                        source="worker_generated",
+                        source=practice_source,
                         created_at=now,
                     )
                     created_practice_item_ids.append(practice_item.item_id)
