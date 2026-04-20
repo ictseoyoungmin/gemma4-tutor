@@ -100,12 +100,28 @@ export type ProblemStats = {
   ready_packs_by_mode: Record<string, number>;
 };
 
+export type CandidatePreviewItem = {
+  prompt: string;
+  choices: string[];
+  answer: string;
+  explanation: string;
+};
+
+export type CandidatePreview = {
+  title: string;
+  mode: string;
+  difficulty: string;
+  item_count: number;
+  items: CandidatePreviewItem[];
+};
+
 export type PackGenerationMeta = {
   strategy: string;
   validated: boolean;
   validation_errors: string[];
   harness: Record<string, unknown>;
   error?: string | null;
+  candidate_preview?: CandidatePreview | null;
 };
 
 export type ProblemInventoryResponse = {

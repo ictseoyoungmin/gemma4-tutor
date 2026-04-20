@@ -8,6 +8,7 @@ from gemma_tutor_edge.jobs import (
     build_part5_practice_item,
     build_pack_from_template,
     build_seed_ready_pack,
+    build_toeic_ready_pack_prompt,
     enqueue_prebuild_job,
     enqueue_problem_generation_job,
     process_job,
@@ -171,6 +172,11 @@ async def test_problem_set_invalid_llm_output_uses_template_fallback_when_saving
     assert ready_pack.generation is not None
     assert ready_pack.generation.strategy == "llm_invalid_fallback"
     assert "item_0_prompt_not_english" in ready_pack.generation.validation_errors
+    candidate_preview = ready_pack.generation.model_extra.get("candidate_preview")
+    assert candidate_preview is not None
+    assert candidate_preview["item_count"] == 3
+    assert candidate_preview["items"][0]["prompt"] == "구매팀은 오늘 공급업체 목록을 검토합니다."
+    assert candidate_preview["items"][0]["answer"] == "review"
     assert len(ready_pack.pack.items) == 10
     assert ready_pack.pack.items[0].prompt != build_seed_ready_pack(
         topic="seed",
@@ -213,6 +219,7 @@ async def test_problem_set_llm_error_uses_template_fallback_when_saving(
     assert ready_pack.generation is not None
     assert ready_pack.generation.strategy == "llm_error_fallback"
     assert ready_pack.generation.error == "synthetic llm failure"
+    assert ready_pack.generation.model_extra.get("candidate_preview") is None
     assert len(ready_pack.pack.items) == 10
     assert ready_pack.pack.items[0].prompt == "Where is the orientation schedule posted?"
 
@@ -276,6 +283,61 @@ async def test_problem_set_valid_llm_output_uses_pack_derived_practice_item(
     assert practice_detail.item.grammar_tag == "worker_generated_part5"
 
 
+@pytest.mark.asyncio
+async def test_problem_set_normalizes_label_style_answers_before_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = SqliteStore(tmp_path / "normalized-answer.db")
+    await store.init()
+
+    label_answer_pack = QuizPack(
+        title="ignored",
+        mode="toeic",
+        difficulty="easy",
+        items=[
+            QuizItem(
+                prompt="The office manager will ___ the revised seating chart this afternoon.",
+                choices=["review", "reviews", "reviewed", "reviewing"],
+                answer="(A)",
+                explanation="'will' 뒤에는 동사원형이 와야 하므로 'review'가 정답입니다.",
+                skill_tags=["toeic", "part5", "grammar"],
+            ),
+            QuizItem(
+                prompt="All applicants must submit identification ___ the interview begins.",
+                choices=["before", "during", "among", "unless"],
+                answer="A.",
+                explanation="면접 시작 이전 시점을 나타내므로 'before'가 자연스럽습니다.",
+                skill_tags=["toeic", "part5", "preposition"],
+            ),
+            QuizItem(
+                prompt="The report was written so ___ that the client approved it immediately.",
+                choices=["clearly", "clear", "clearness", "cleared"],
+                answer="A",
+                explanation="동사 was written을 수식하는 부사가 필요하므로 'clearly'가 맞습니다.",
+                skill_tags=["toeic", "part5", "adverb"],
+            ),
+        ],
+    )
+    monkeypatch.setattr(jobs_module, "build_quiz_agent", lambda model: _FakeAgent(output=label_answer_pack))
+
+    job = await enqueue_problem_generation_job(
+        store,
+        user_id="u1",
+        part_counts={"part5": 1},
+    )
+    result = await process_job(store=store, model="fake-model", job=job)
+
+    ready_pack = await store.get_ready_pack("u1", result["created_pack_ids"][0])
+    assert ready_pack is not None
+    assert ready_pack.generation is not None
+    assert ready_pack.generation.strategy == "llm"
+    assert ready_pack.generation.validation_errors == []
+    assert ready_pack.pack.items[0].answer == "review"
+    assert ready_pack.pack.items[1].answer == "before"
+    assert ready_pack.pack.items[2].answer == "clearly"
+
+
 def test_template_fallback_packs_are_part_aware_and_valid():
     part2_pack = build_pack_from_template(
         {"title": "Part 2 응답 패턴 훈련", "difficulty": "easy", "item_count": 10},
@@ -308,3 +370,50 @@ def test_template_fallback_packs_are_part_aware_and_valid():
             require_english_items=True,
             require_korean_explanations=True,
         )["passed"] is True
+
+
+def test_toeic_ready_pack_prompt_contracts_are_part_specific():
+    part2_prompt = build_toeic_ready_pack_prompt(
+        topic="Part 2 응답 패턴 훈련",
+        difficulty="easy",
+        item_count=10,
+        part_type="part2",
+    )
+    part3_prompt = build_toeic_ready_pack_prompt(
+        topic="PART3 실전 팩 1",
+        difficulty="medium",
+        item_count=20,
+        part_type="part3",
+    )
+    part5_prompt = build_toeic_ready_pack_prompt(
+        topic="Part 5 핵심 문법 10선",
+        difficulty="easy",
+        item_count=10,
+        part_type="part5",
+    )
+    part6_prompt = build_toeic_ready_pack_prompt(
+        topic="PART6 실전 팩 1",
+        difficulty="medium",
+        item_count=20,
+        part_type="part6",
+    )
+    part7_prompt = build_toeic_ready_pack_prompt(
+        topic="Part 7 독해 지문 분석",
+        difficulty="medium",
+        item_count=20,
+        part_type="part7",
+    )
+
+    assert "one-question one-response TOEIC listening response item" in part2_prompt
+    assert "The prompt must be a natural question." in part2_prompt
+
+    assert "short workplace dialogue followed by one comprehension question" in part3_prompt
+
+    assert "single incomplete sentence with one blank shown as ___" in part5_prompt
+    assert "The 4 choices must be short word or phrase options" in part5_prompt
+
+    assert "Do not emit comma-joined choice strings." in part6_prompt
+    assert "short sentence-completion grammar or vocabulary question in passage style" in part6_prompt
+
+    assert "short reading passage such as an email, notice, memo, or article excerpt" in part7_prompt
+    assert "Do not return fewer items than requested." in part7_prompt

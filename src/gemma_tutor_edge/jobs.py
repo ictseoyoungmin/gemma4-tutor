@@ -12,6 +12,7 @@ from .storage import SqliteStore
 
 
 HANGUL_PATTERN = re.compile(r"[가-힣]")
+CHOICE_LABEL_PATTERN = re.compile(r"^\s*[\(\[]?([A-Da-d])[\)\].:-]?\s*")
 
 
 async def enqueue_prebuild_job(store: SqliteStore, user_id: str, topic: str, mode: str = "grammar", difficulty: str = "medium") -> BackgroundJob:
@@ -409,6 +410,122 @@ def build_problem_set_fallback_pack(
     )
 
 
+def build_candidate_preview(pack: QuizPack, *, max_items: int = 3) -> dict[str, object]:
+    return {
+        "title": pack.title,
+        "mode": pack.mode,
+        "difficulty": pack.difficulty,
+        "item_count": len(pack.items),
+        "items": [
+            {
+                "prompt": item.prompt,
+                "choices": item.choices,
+                "answer": item.answer,
+                "explanation": item.explanation,
+            }
+            for item in pack.items[:max_items]
+        ],
+    }
+
+
+def strip_choice_label(text: str) -> str:
+    return CHOICE_LABEL_PATTERN.sub("", text).strip()
+
+
+def normalize_answer_to_choice_text(answer: str, choices: list[str]) -> str:
+    trimmed_answer = answer.strip()
+    if trimmed_answer in choices:
+        return trimmed_answer
+
+    answer_match = CHOICE_LABEL_PATTERN.match(trimmed_answer)
+    if answer_match:
+        choice_index = ord(answer_match.group(1).upper()) - ord("A")
+        if 0 <= choice_index < len(choices):
+            return choices[choice_index]
+
+    normalized_answer = strip_choice_label(trimmed_answer)
+    for choice in choices:
+        if normalized_answer == strip_choice_label(choice):
+            return choice
+    return trimmed_answer
+
+
+def normalize_pack_answers(pack: QuizPack) -> QuizPack:
+    normalized_items = [
+        item.model_copy(
+            update={
+                "answer": normalize_answer_to_choice_text(item.answer, item.choices),
+            }
+        )
+        for item in pack.items
+    ]
+    return pack.model_copy(update={"items": normalized_items})
+
+
+def build_toeic_ready_pack_prompt(
+    *,
+    topic: str,
+    difficulty: str,
+    item_count: int,
+    part_type: str,
+) -> str:
+    shared_rules = (
+        f'Create a TOEIC {part_type.upper()} ready pack with the exact Korean title "{topic}". '
+        f"Difficulty: {difficulty}. Count: {item_count}. "
+        "All prompts, answer choices, and correct answers must be written in English only. "
+        "All explanations must be written in Korean only. "
+        "Every item must have exactly 4 answer choices and the correct answer must exactly match one of those choices. "
+        "Return a fully structured pack with practical, test-like content only. "
+    )
+
+    if part_type == "part1":
+        return (
+            shared_rules
+            + "Part 1 contract: each item must describe a business or workplace image scenario in one short sentence. "
+            + "Do not mention image filenames or metadata. Keep options plausible visual descriptions."
+        )
+    if part_type == "part2":
+        return (
+            shared_rules
+            + "Part 2 contract: each item must be a one-question one-response TOEIC listening response item. "
+            + "The prompt must be a natural question. The 4 choices must be short spoken responses, and exactly one response must fit the question best."
+        )
+    if part_type == "part3":
+        return (
+            shared_rules
+            + "Part 3 contract: each item must include a short workplace dialogue followed by one comprehension question. "
+            + "The 4 choices must answer that question directly."
+        )
+    if part_type == "part4":
+        return (
+            shared_rules
+            + "Part 4 contract: each item must include a short talk, announcement, or phone message followed by one comprehension question. "
+            + "The 4 choices must answer that question directly."
+        )
+    if part_type == "part5":
+        return (
+            shared_rules
+            + "Part 5 contract: each item must be a single incomplete sentence with one blank shown as ___. "
+            + "The 4 choices must be short word or phrase options, not full sentence responses."
+        )
+    if part_type == "part6":
+        return (
+            shared_rules
+            + "Part 6 contract: each item must be a short sentence-completion grammar or vocabulary question in passage style. "
+            + "Use one blank shown as ___ and provide 4 short word or phrase choices only. Do not emit comma-joined choice strings."
+        )
+    if part_type == "part7":
+        return (
+            shared_rules
+            + "Part 7 contract: each item must include a short reading passage such as an email, notice, memo, or article excerpt followed by one comprehension question. "
+            + "Because this is a reading pack, each item should be self-contained and passage-based. Do not return fewer items than requested."
+        )
+    return (
+        shared_rules
+        + "Use the TOEIC part format that best matches the requested part type and keep every item structurally consistent."
+    )
+
+
 def validate_quiz_pack(
     pack: QuizPack,
     *,
@@ -470,13 +587,11 @@ async def generate_ready_pack(
         agent = build_quiz_agent(model)
         deps = ContentDeps(user_id=user_id, store=store)
         if mode == "toeic":
-            prompt = (
-                f'Create a TOEIC {part_type.upper()} ready pack with the exact Korean title "{topic}". '
-                f"Difficulty: {difficulty}. Count: {item_count}. "
-                "All questions, answer choices, and correct answers must be written in English only. "
-                "All explanations must be written in Korean only. "
-                "Keep every item practical and test-like, not placeholder content. "
-                "Return a fully structured pack."
+            prompt = build_toeic_ready_pack_prompt(
+                topic=topic,
+                difficulty=difficulty,
+                item_count=item_count,
+                part_type=part_type,
             )
         else:
             prompt = (
@@ -488,13 +603,14 @@ async def generate_ready_pack(
             )
         try:
             result = await agent.run(prompt, deps=deps)
-            candidate_pack = result.output.model_copy(
+            raw_candidate_pack = result.output.model_copy(
                 update={
                     "title": topic,
                     "mode": mode,
                     "difficulty": difficulty,
                 }
             )
+            candidate_pack = normalize_pack_answers(raw_candidate_pack)
             validation_errors = validate_quiz_pack(
                 candidate_pack,
                 require_english_items=True,
@@ -512,6 +628,7 @@ async def generate_ready_pack(
                 generation_meta["validated"] = True
                 return candidate_pack, generation_meta
             generation_meta["strategy"] = "llm_invalid_fallback"
+            generation_meta["candidate_preview"] = build_candidate_preview(raw_candidate_pack)
         except Exception as exc:  # noqa: BLE001
             generation_meta["strategy"] = "llm_error_fallback"
             generation_meta["error"] = str(exc)

@@ -59,6 +59,21 @@ function getStrategyLabel(strategy?: string | null) {
   return strategyLabel[strategy] ?? strategy;
 }
 
+function normalizeValidationErrorKey(error: string) {
+  return error.replace(/^item_\d+_/, "");
+}
+
+function summarizeValidationErrors(errors: string[]) {
+  const counts = new Map<string, number>();
+  for (const error of errors) {
+    const key = normalizeValidationErrorKey(error);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([key, count]) => ({ key, count }))
+    .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key));
+}
+
 export function ProblemTab({ userId }: { userId: string }) {
   const [inventory, setInventory] = useState<ProblemInventoryResponse | null>(null);
   const [workerStatus, setWorkerStatus] = useState<WorkerStatusResponse | null>(null);
@@ -113,6 +128,11 @@ export function ProblemTab({ userId }: { userId: string }) {
   );
   const selectedReadyPackFailures = selectedReadyPack?.generation?.validation_errors ?? [];
   const selectedReadyPackHarnessPassed = selectedReadyPack?.generation?.harness?.passed;
+  const selectedReadyPackFailureSummary = useMemo(
+    () => summarizeValidationErrors(selectedReadyPackFailures),
+    [selectedReadyPackFailures],
+  );
+  const failedCandidatePreview = selectedReadyPack?.generation?.candidate_preview;
 
   useEffect(() => {
     void loadAll();
@@ -580,6 +600,14 @@ export function ProblemTab({ userId }: { userId: string }) {
                       {selectedReadyPack.generation.error ? ` · error: ${selectedReadyPack.generation.error}` : ""}
                     </div>
                   </div>
+                  {selectedReadyPackFailureSummary.map((entry) => (
+                    <div key={entry.key} className="workspace-problem-failure">
+                      <div className="workspace-problem-failure__title">validation summary</div>
+                      <div className="workspace-problem-failure__copy">
+                        {entry.key}: {entry.count}
+                      </div>
+                    </div>
+                  ))}
                   {selectedReadyPackFailures.slice(0, 3).map((failure) => (
                     <div key={failure} className="workspace-problem-failure">
                       <div className="workspace-problem-failure__title">validation failure</div>
@@ -588,7 +616,43 @@ export function ProblemTab({ userId }: { userId: string }) {
                   ))}
                 </div>
               ) : null}
+              {failedCandidatePreview ? (
+                <div className="workspace-ready-pack__items">
+                  <div className="workspace-ready-pack__title-row">
+                    <div>
+                      <div className="workspace-ready-pack__title">Failed LLM Attempt</div>
+                      <div className="workspace-ready-pack__meta-line">
+                        {failedCandidatePreview.mode} · {difficultyLabel[failedCandidatePreview.difficulty] ?? failedCandidatePreview.difficulty} · preview {failedCandidatePreview.items.length}/{failedCandidatePreview.item_count}문항
+                      </div>
+                    </div>
+                  </div>
+                  {failedCandidatePreview.items.map((item, index) => (
+                    <div key={`candidate-preview-${index}`} className="workspace-ready-pack__item">
+                      <div className="workspace-ready-pack__question">Q{index + 1}. {item.prompt}</div>
+                      {item.choices.length ? (
+                        <div className="workspace-ready-pack__choices">
+                          {item.choices.map((choice) => (
+                            <div key={`${index}-${choice}`} className="workspace-ready-pack__choice">
+                              {choice}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="workspace-ready-pack__feedback">answer: {item.answer}</div>
+                      <div className="workspace-ready-pack__feedback">{item.explanation}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="workspace-ready-pack__items">
+                <div className="workspace-ready-pack__title-row">
+                  <div>
+                    <div className="workspace-ready-pack__title">Saved Fallback Pack</div>
+                    <div className="workspace-ready-pack__meta-line">
+                      UI에 저장된 최종 Ready Pack 미리보기입니다.
+                    </div>
+                  </div>
+                </div>
                 {selectedReadyPack.pack.items.slice(0, 5).map((item, index) => (
                   <div key={`${selectedReadyPack.ready_pack_id}-${index}`} className="workspace-ready-pack__item">
                     <div className="workspace-ready-pack__question">Q{index + 1}. {item.prompt}</div>
