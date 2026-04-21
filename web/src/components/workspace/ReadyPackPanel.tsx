@@ -38,6 +38,65 @@ const modeLabel: Record<StudyMode, string> = {
   exam: "실전 풀이",
 };
 
+const readyPackCatalog: Record<string, { itemCount: number; minutes: number; icon: "grammar" | "vocab" | "reading" | "listening" }> = {
+  "Part 5 핵심 문법 40선": { itemCount: 40, minutes: 30, icon: "grammar" },
+  "비즈니스 어휘 실전편": { itemCount: 60, minutes: 45, icon: "vocab" },
+  "RC 고난도 모의고사": { itemCount: 100, minutes: 75, icon: "reading" },
+  "전치사 집중 훈련": { itemCount: 30, minutes: 20, icon: "grammar" },
+};
+
+function getReadyPackDisplayMeta(pack: ReadyQuizSummary) {
+  const preset = readyPackCatalog[pack.title];
+  if (preset) return preset;
+  const requestedItemCount = typeof pack.generation?.requested_item_count === "number" ? pack.generation.requested_item_count : null;
+  const inferredItemCount = requestedItemCount ?? 20;
+  return {
+    itemCount: inferredItemCount,
+    minutes: Math.max(10, Math.round(inferredItemCount * 0.75)),
+    icon: pack.mode === "toeic" ? "reading" : "grammar",
+  } as const;
+}
+
+function ReadyPackCardIcon({ icon }: { icon: "grammar" | "vocab" | "reading" | "listening" }) {
+  if (icon === "vocab") {
+    return (
+      <svg className="workspace-ready-pack__card-icon-svg" viewBox="0 0 24 24">
+        <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4H20v15H7.5A2.5 2.5 0 0 0 5 21.5v-15Z" />
+        <path d="M8 8h8" />
+        <path d="M8 12h6" />
+      </svg>
+    );
+  }
+  if (icon === "reading") {
+    return (
+      <svg className="workspace-ready-pack__card-icon-svg" viewBox="0 0 24 24">
+        <rect x="4" y="4" width="16" height="16" rx="3" />
+        <path d="M8 8h8" />
+        <path d="M8 12h8" />
+        <path d="M8 16h5" />
+      </svg>
+    );
+  }
+  if (icon === "listening") {
+    return (
+      <svg className="workspace-ready-pack__card-icon-svg" viewBox="0 0 24 24">
+        <path d="M12 5a7 7 0 0 1 7 7v4" />
+        <path d="M5 16v-4a7 7 0 0 1 7-7" />
+        <rect x="3" y="14" width="4" height="6" rx="2" />
+        <rect x="17" y="14" width="4" height="6" rx="2" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="workspace-ready-pack__card-icon-svg" viewBox="0 0 24 24">
+      <path d="M6 4h12" />
+      <path d="M9 4v5" />
+      <path d="M15 4v5" />
+      <path d="M7 11h10l-1 8H8l-1-8Z" />
+    </svg>
+  );
+}
+
 function computeReviewEntries(session: StudySession): ReviewEntry[] {
   return session.launch.pack.items.map((item, index) => {
     const selectedAnswer = session.answers[index] ?? "";
@@ -234,24 +293,31 @@ export function ReadyPackPanel({
     }
 
     return packs.map((pack) => (
-      <article
-        key={pack.ready_pack_id}
-        className={`workspace-pack workspace-pack--launcher${selectedPackId === pack.ready_pack_id ? " is-active" : ""}`}
-      >
+      <article key={pack.ready_pack_id} className={`workspace-pack workspace-pack--launcher${selectedPackId === pack.ready_pack_id ? " is-active" : ""}`}>
+        <div className="workspace-ready-pack__card-top">
+          <div className="workspace-ready-pack__card-icon">
+            <ReadyPackCardIcon icon={getReadyPackDisplayMeta(pack).icon} />
+          </div>
+          <div className={`workspace-pack__badge is-${pack.difficulty}`}>
+            {difficultyLabel[pack.difficulty] ?? pack.difficulty}
+          </div>
+        </div>
         <button
           type="button"
           className="workspace-pack__body workspace-pack__body--selectable"
           onClick={() => setSelectedPackId(pack.ready_pack_id)}
         >
           <div className="workspace-pack__name">{pack.title}</div>
+          <div className="workspace-ready-pack__card-stats">
+            <span>{getReadyPackDisplayMeta(pack).itemCount}문항</span>
+            <span>·</span>
+            <span>{getReadyPackDisplayMeta(pack).minutes}분</span>
+          </div>
           <div className="workspace-pack__meta">
-            {pack.mode} · {new Date(pack.created_at).toLocaleDateString()}
+            {pack.mode.toUpperCase()} · {new Date(pack.created_at).toLocaleDateString()}
           </div>
         </button>
         <div className="workspace-ready-pack__launcher-row">
-          <div className={`workspace-pack__badge is-${pack.difficulty}`}>
-            {difficultyLabel[pack.difficulty] ?? pack.difficulty}
-          </div>
           <div className="workspace-ready-pack__launcher-actions">
             <button
               type="button"
@@ -529,10 +595,6 @@ export function ReadyPackPanel({
   return (
     <section className="workspace-panel workspace-ready-pack">
       <div className="workspace-panel__head">
-        <div>
-          <div className="workspace-panel__title">Ready Pack Launcher</div>
-          <div className="workspace-ready-pack__subcopy">목록 화면, 실전 풀이 화면, 결과 리뷰 화면을 분리한 집중 학습 플로우.</div>
-        </div>
         <div className="workspace-ready-pack__head-meta">
           <span className="workspace-panel__metric">{status}</span>
           <button type="button" className="workspace-ready-pack__refresh" onClick={() => void loadReadyPacks()}>

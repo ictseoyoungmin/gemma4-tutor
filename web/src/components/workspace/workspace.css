@@ -1466,6 +1466,8 @@
   gap: 12px;
   min-height: 148px;
   justify-content: space-between;
+  padding: 14px;
+  align-items: stretch;
 }
 
 .workspace-pack__body--selectable {
@@ -1494,6 +1496,46 @@
   gap: 10px;
 }
 
+.workspace-ready-pack__card-top,
+.workspace-ready-pack__card-stats {
+  display: flex;
+  align-items: center;
+}
+
+.workspace-ready-pack__card-top {
+  justify-content: space-between;
+}
+
+.workspace-ready-pack__card-stats {
+  gap: 6px;
+  margin: 8px 0 4px;
+  color: var(--a1);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.workspace-ready-pack__card-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--a5);
+  background: linear-gradient(180deg, rgba(90, 50, 5, 0.65), rgba(46, 25, 2, 0.95));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--a1);
+}
+
+.workspace-ready-pack__card-icon-svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .workspace-ready-pack__launcher-actions,
 .workspace-ready-pack__study-actions-right {
   gap: 8px;
@@ -1502,13 +1544,15 @@
 .workspace-ready-pack__launch-btn,
 .workspace-ready-pack__ghost-btn,
 .workspace-ready-pack__back-btn,
+.workspace-module-stage__back,
 .workspace-ready-pack__nav-item {
   font: inherit;
 }
 
 .workspace-ready-pack__launch-btn,
 .workspace-ready-pack__ghost-btn,
-.workspace-ready-pack__back-btn {
+.workspace-ready-pack__back-btn,
+.workspace-module-stage__back {
   border-radius: 10px;
   cursor: pointer;
   transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
@@ -1528,7 +1572,8 @@
 }
 
 .workspace-ready-pack__ghost-btn,
-.workspace-ready-pack__back-btn {
+.workspace-ready-pack__back-btn,
+.workspace-module-stage__back {
   padding: 8px 12px;
   border: 1px solid var(--b1);
   background: transparent;
@@ -1537,8 +1582,10 @@
 
 .workspace-ready-pack__ghost-btn:hover,
 .workspace-ready-pack__back-btn:hover,
+.workspace-module-stage__back:hover,
 .workspace-ready-pack__ghost-btn:focus-visible,
-.workspace-ready-pack__back-btn:focus-visible {
+.workspace-ready-pack__back-btn:focus-visible,
+.workspace-module-stage__back:focus-visible {
   border-color: var(--b1);
   background: var(--bg3);
   color: var(--t0);
@@ -1955,6 +2002,11 @@
 
 .workspace-module-stage--full {
   min-height: calc(100dvh - 130px);
+}
+
+.workspace-module-stage .workspace-panel__head {
+  justify-content: flex-start;
+  gap: 14px;
 }
 
 .workspace-module-stage__subcopy,
