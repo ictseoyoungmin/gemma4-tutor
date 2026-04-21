@@ -60,13 +60,21 @@ Completed work:
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
 - allow choosing the tutor chat model from the learner workspace,
 - pass the selected model through the API request path,
 - keep a safe default if no model is selected.
+
+Completed work:
+
+- added per-request `model_name` support to chat requests,
+- added backend model override handling for tutor chat without changing the global worker model,
+- added a model selector UI to the learner workspace tutor chat panel,
+- wired the selected model through the frontend API request path,
+- verified the frontend build after the selector integration.
 
 ### Slice 4. Follow-up UI/operator polish
 

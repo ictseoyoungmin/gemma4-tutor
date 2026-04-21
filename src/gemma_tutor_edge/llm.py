@@ -10,7 +10,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from .config import Settings
 
 
-def build_model(settings: Settings):
+def build_model_for_name(settings: Settings, model_name: str | None):
     if settings.llm_backend == "google":
         api_key = settings.resolved_google_api_key
         if not api_key:
@@ -18,13 +18,17 @@ def build_model(settings: Settings):
                 "Google backend selected but no GEMINI_API_KEY/GOOGLE_API_KEY was provided."
             )
         provider = GoogleProvider(api_key=api_key)
-        return GoogleModel(settings.google_model, provider=provider)
+        return GoogleModel(model_name or settings.google_model, provider=provider)
 
     if settings.llm_backend == "llama_cpp":
         provider = OpenAIProvider(
             base_url=settings.llama_base_url,
             api_key=settings.llama_api_key,
         )
-        return OpenAIChatModel(settings.llama_model, provider=provider)
+        return OpenAIChatModel(model_name or settings.llama_model, provider=provider)
 
     return "test"
+
+
+def build_model(settings: Settings):
+    return build_model_for_name(settings, None)

@@ -3,9 +3,11 @@ from __future__ import annotations
 from uuid import uuid4
 
 from .agents import build_quiz_agent, build_tutor_agent, build_vision_agent, run_image_analysis
+from .config import get_settings
 from .deps import ContentDeps, TutorDeps
 from .jobs import build_seed_ready_pack, enqueue_prebuild_job
 from .jobs import enqueue_problem_generation_job
+from .llm import build_model_for_name
 from .schemas import (
     ChatRequest,
     ChatResponse,
@@ -34,7 +36,8 @@ from .toeic import TOEIC_ITEMS, get_item_by_id, select_next_item
 
 
 async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> ChatResponse:
-    if model == "test":
+    selected_model = build_model_for_name(get_settings(), request.model_name) if request.model_name else model
+    if selected_model == "test":
         session_id = request.session_id or uuid4().hex
         return ChatResponse(
             session_id=session_id,
@@ -47,7 +50,7 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
             },
             usage={},
         )
-    agent = build_tutor_agent(model)
+    agent = build_tutor_agent(selected_model)
     deps = TutorDeps(user_id=request.user_id, store=store)
     session_id = request.session_id or uuid4().hex
     result = await agent.run(request.message, deps=deps)

@@ -40,18 +40,27 @@ const initialTurns: ChatTurn[] = [
   },
 ];
 
+const chatModelOptions = [
+  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
+  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Lite" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+] as const;
+
 export function TutorChatPanel({ userId }: { userId: string }) {
   const [draft, setDraft] = useState(starterDrafts["TOEIC Part 5"]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>(initialTurns);
   const [status, setStatus] = useState("연결됨");
   const [isSending, setIsSending] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<(typeof chatModelOptions)[number]["value"]>(
+    "gemini-3-flash-preview",
+  );
 
   const helperText = useMemo(() => {
     if (isSending) return "튜터가 다음 학습 흐름을 준비하고 있어요.";
-    if (sessionId) return "현재 세션이 이어지고 있어요.";
+    if (sessionId) return `현재 세션이 이어지고 있어요. model: ${selectedModel}`;
     return "메시지를 입력하거나 예문에 답해보세요…";
-  }, [isSending, sessionId]);
+  }, [isSending, selectedModel, sessionId]);
 
   async function handleSubmit(message: string) {
     const trimmed = message.trim();
@@ -67,10 +76,10 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     ]);
     setDraft("");
     setIsSending(true);
-    setStatus("메시지 전송 중...");
+    setStatus(`메시지 전송 중... · ${selectedModel}`);
 
     try {
-      const response = await sendChatMessage(userId, trimmed, sessionId);
+      const response = await sendChatMessage(userId, trimmed, sessionId, selectedModel);
       setSessionId(response.session_id);
       setTurns((current) => [
         ...current,
@@ -78,11 +87,11 @@ export function TutorChatPanel({ userId }: { userId: string }) {
           id: response.run_id,
           role: "assistant",
           message: response.output.message,
-          meta: `intent: ${response.output.detected_intent}`,
+          meta: `intent: ${response.output.detected_intent} · model: ${selectedModel}`,
           suggestions: response.output.suggested_next_actions,
         },
       ]);
-      setStatus("응답 수신 완료");
+      setStatus(`응답 수신 완료 · ${selectedModel}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       setTurns((current) => [
@@ -108,6 +117,23 @@ export function TutorChatPanel({ userId }: { userId: string }) {
           오늘 무엇을
           <br />
           연습할까요?
+        </div>
+        <div className="workspace-chat__model-row">
+          <label className="workspace-chat__model-label" htmlFor="chat-model-select">
+            Model
+          </label>
+          <select
+            id="chat-model-select"
+            className="workspace-chat__model-select"
+            value={selectedModel}
+            onChange={(event) => setSelectedModel(event.target.value as (typeof chatModelOptions)[number]["value"])}
+          >
+            {chatModelOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="workspace-chat__chips">
           {starterPrompts.map((prompt, index) => (

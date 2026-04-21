@@ -191,6 +191,7 @@ export async function sendChatMessage(
   userId: string,
   message: string,
   sessionId?: string | null,
+  modelName?: string | null,
 ): Promise<ChatResponse> {
   const response = await fetch(`${API_BASE}/v1/chat`, {
     method: "POST",
@@ -199,6 +200,7 @@ export async function sendChatMessage(
       user_id: userId,
       session_id: sessionId ?? undefined,
       message,
+      model_name: modelName ?? undefined,
     }),
   });
   if (!response.ok) {

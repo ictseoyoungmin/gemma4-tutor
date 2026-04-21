@@ -242,6 +242,30 @@
   gap: 5px;
 }
 
+.workspace-chat__model-row {
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workspace-chat__model-label {
+  color: var(--t2);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.workspace-chat__model-select {
+  min-width: 180px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--b1);
+  background: var(--bg2);
+  color: var(--t0);
+}
+
 .workspace-chat__chip {
   padding: 4px 10px;
   border-radius: 999px;
