@@ -4,7 +4,7 @@ const dayLabels = ["월", "화", "수", "목", "금", "토", "일"];
 
 export function WorkspaceRightRail() {
   return (
-    <aside className="workspace-rail">
+    <div className="workspace-rail__inner">
       <div className="workspace-rail__head">
         <div className="workspace-rail__eyebrow">학습 현황</div>
         <div>
@@ -52,6 +52,6 @@ export function WorkspaceRightRail() {
           </div>
         </section>
       </div>
-    </aside>
+    </div>
   );
 }

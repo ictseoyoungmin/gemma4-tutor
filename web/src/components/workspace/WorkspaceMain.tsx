@@ -69,7 +69,15 @@ function MediaAudioPlaceholder() {
   );
 }
 
-export function WorkspaceMain({ userId, activeTab }: { userId: string; activeTab: string }) {
+export function WorkspaceMain({
+  userId,
+  activeTab,
+  onReadyPackFocusChange,
+}: {
+  userId: string;
+  activeTab: string;
+  onReadyPackFocusChange?: (focused: boolean) => void;
+}) {
   const [activeModule, setActiveModule] = useState<ActiveModule>("dashboard");
 
   function renderActiveModule() {
@@ -78,7 +86,7 @@ export function WorkspaceMain({ userId, activeTab }: { userId: string; activeTab
     }
 
     if (activeModule === "ready-pack") {
-      return <ReadyPackPanel userId={userId} />;
+      return <ReadyPackPanel userId={userId} onFocusModeChange={onReadyPackFocusChange} />;
     }
 
     return null;
@@ -110,7 +118,7 @@ export function WorkspaceMain({ userId, activeTab }: { userId: string; activeTab
   if (activeTab === "Ready Pack") {
     return (
       <main className="workspace-main">
-        <ReadyPackPanel userId={userId} />
+        <ReadyPackPanel userId={userId} onFocusModeChange={onReadyPackFocusChange} />
       </main>
     );
   }
