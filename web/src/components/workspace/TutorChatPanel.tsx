@@ -87,7 +87,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
           id: response.run_id,
           role: "assistant",
           message: response.output.message,
-          meta: `intent: ${response.output.detected_intent} · model: ${selectedModel}`,
+          meta: `intent: ${response.output.detected_intent}`, //· model: ${selectedModel}
           suggestions: response.output.suggested_next_actions,
         },
       ]);
