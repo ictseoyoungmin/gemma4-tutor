@@ -40,13 +40,21 @@ Completed work:
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
 - add one bounded repair attempt when the first LLM output is structurally invalid,
 - preserve the failed original attempt preview for the UI,
 - distinguish first-pass success, repair success, and fallback in metadata.
+
+Completed work:
+
+- added one bounded repair attempt for invalid TOEIC chunk outputs,
+- introduced a structured repair prompt that reuses the part-specific contract and lists concrete validation failures,
+- preserved both the original failed candidate preview and the repair-attempt preview in metadata when repair still fails,
+- distinguished plain `llm` success from `llm_repair` success in generation metadata,
+- added regression tests for repair success and repair-fallback behavior.
 
 ### Slice 3. Tutor chat model selector
 

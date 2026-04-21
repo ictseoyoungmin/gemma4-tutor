@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 import re
 from uuid import uuid4
@@ -548,6 +549,57 @@ def build_toeic_ready_pack_prompt(
     )
 
 
+def build_toeic_repair_prompt(
+    *,
+    topic: str,
+    difficulty: str,
+    item_count: int,
+    part_type: str,
+    validation_errors: list[str],
+    candidate_pack: QuizPack,
+    chunk_index: int | None = None,
+    total_chunks: int | None = None,
+) -> str:
+    base_prompt = build_toeic_ready_pack_prompt(
+        topic=topic,
+        difficulty=difficulty,
+        item_count=item_count,
+        part_type=part_type,
+        chunk_index=chunk_index,
+        total_chunks=total_chunks,
+    )
+    preview_payload = build_candidate_preview(candidate_pack)
+    return (
+        base_prompt
+        + " Repair pass: the previous attempt was structurally invalid. "
+        + "Regenerate this chunk from scratch and fix the exact issues listed below. "
+        + "Do not copy malformed choice arrays, broken list syntax, or mismatched answers. "
+        + f"Validation failures: {', '.join(validation_errors) if validation_errors else 'none recorded'}. "
+        + "Previous failed candidate preview follows as JSON. "
+        + json.dumps(preview_payload, ensure_ascii=False)
+    )
+
+
+def evaluate_pack(
+    pack: QuizPack,
+    *,
+    minimum_item_count: int,
+) -> tuple[list[str], dict[str, object]]:
+    validation_errors = validate_quiz_pack(
+        pack,
+        require_english_items=True,
+        require_korean_explanations=True,
+        minimum_item_count=minimum_item_count,
+    )
+    harness_result = validate_generated_pack(
+        pack,
+        require_english_items=True,
+        require_korean_explanations=True,
+        minimum_item_count=minimum_item_count,
+    )
+    return validation_errors, harness_result
+
+
 def validate_quiz_pack(
     pack: QuizPack,
     *,
@@ -642,23 +694,46 @@ async def generate_ready_pack(
                         }
                     )
                     candidate_pack = normalize_pack_answers(raw_candidate_pack)
-                    validation_errors = validate_quiz_pack(
+                    validation_errors, harness_result = evaluate_pack(
                         candidate_pack,
-                        require_english_items=True,
-                        require_korean_explanations=True,
-                        minimum_item_count=1,
-                    )
-                    harness_result = validate_generated_pack(
-                        candidate_pack,
-                        require_english_items=True,
-                        require_korean_explanations=True,
                         minimum_item_count=1,
                     )
                     if validation_errors or not harness_result["passed"]:
-                        generation_meta["validation_errors"] = validation_errors
-                        generation_meta["harness"] = harness_result
+                        generation_meta["repair_attempted"] = True
+                        repair_prompt = build_toeic_repair_prompt(
+                            topic=topic,
+                            difficulty=difficulty,
+                            item_count=chunk_count,
+                            part_type=part_type,
+                            validation_errors=validation_errors,
+                            candidate_pack=raw_candidate_pack,
+                            chunk_index=chunk_index,
+                            total_chunks=len(chunk_counts),
+                        )
+                        repair_result = await agent.run(repair_prompt, deps=deps)
+                        raw_repaired_pack = repair_result.output.model_copy(
+                            update={
+                                "title": topic,
+                                "mode": mode,
+                                "difficulty": difficulty,
+                            }
+                        )
+                        repaired_pack = normalize_pack_answers(raw_repaired_pack)
+                        repair_validation_errors, repair_harness_result = evaluate_pack(
+                            repaired_pack,
+                            minimum_item_count=1,
+                        )
+                        if not repair_validation_errors and repair_harness_result["passed"]:
+                            generation_meta["repair_success_count"] = int(generation_meta.get("repair_success_count", 0)) + 1
+                            normalized_chunk_packs.append(repaired_pack)
+                            continue
+
+                        generation_meta["validation_errors"] = repair_validation_errors
+                        generation_meta["harness"] = repair_harness_result
                         generation_meta["strategy"] = "llm_invalid_fallback"
                         generation_meta["candidate_preview"] = build_candidate_preview(raw_candidate_pack)
+                        generation_meta["repair_candidate_preview"] = build_candidate_preview(raw_repaired_pack)
+                        generation_meta["repair_failed_validation_errors"] = repair_validation_errors
                         generation_meta["failed_chunk_index"] = chunk_index
                         generation_meta["failed_chunk_size"] = chunk_count
                         break
@@ -670,20 +745,18 @@ async def generate_ready_pack(
                         difficulty=difficulty,  # type: ignore[arg-type]
                         items=[item for pack in normalized_chunk_packs for item in pack.items],
                     )
-                    final_validation_errors = validate_quiz_pack(
+                    final_validation_errors, final_harness_result = evaluate_pack(
                         merged_pack,
-                        require_english_items=True,
-                        require_korean_explanations=True,
-                    )
-                    final_harness_result = validate_generated_pack(
-                        merged_pack,
-                        require_english_items=True,
-                        require_korean_explanations=True,
+                        minimum_item_count=3,
                     )
                     generation_meta["validation_errors"] = final_validation_errors
                     generation_meta["harness"] = final_harness_result
                     if not final_validation_errors and final_harness_result["passed"]:
-                        generation_meta["strategy"] = "llm"
+                        generation_meta["strategy"] = (
+                            "llm_repair"
+                            if generation_meta.get("repair_success_count", 0)
+                            else "llm"
+                        )
                         generation_meta["validated"] = True
                         return merged_pack, generation_meta
                     generation_meta["strategy"] = "llm_invalid_fallback"

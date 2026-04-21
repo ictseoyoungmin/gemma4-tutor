@@ -153,6 +153,17 @@ class _ChunkedFakeAgent:
         )
 
 
+class _QueuedFakeAgent:
+    def __init__(self, outputs: list[QuizPack]):
+        self.outputs = outputs
+        self.prompts: list[str] = []
+
+    async def run(self, prompt: str, deps):  # noqa: ANN001
+        self.prompts.append(prompt)
+        assert self.outputs, "No queued outputs left for fake agent"
+        return _FakeAgentResult(self.outputs.pop(0))
+
+
 @pytest.mark.asyncio
 async def test_problem_set_invalid_llm_output_uses_template_fallback_when_saving(
     tmp_path: Path,
@@ -456,6 +467,163 @@ def test_toeic_ready_pack_prompt_contracts_are_part_specific():
 
     assert "short reading passage such as an email, notice, memo, or article excerpt" in part7_prompt
     assert "Do not return fewer items than requested." in part7_prompt
+
+
+@pytest.mark.asyncio
+async def test_generate_ready_pack_repairs_invalid_chunk_once_before_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = SqliteStore(tmp_path / "repair-success.db")
+    await store.init()
+
+    invalid_chunk = QuizPack(
+        title="ignored",
+        mode="toeic",
+        difficulty="easy",
+        items=[
+            QuizItem(
+                prompt="Where is the meeting being held?",
+                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is.", "By email.", "(E) None of the above."],
+                answer="It's in the conference room.",
+                explanation="장소 질문이므로 회의실 응답이 맞습니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+            QuizItem(
+                prompt="When will the manager arrive?",
+                choices=["Tomorrow morning.", "At the station.", "Yes, he does.", "By bus."],
+                answer="Tomorrow morning.",
+                explanation="시간을 묻는 질문입니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+            QuizItem(
+                prompt="Who approved the revised budget?",
+                choices=["The finance director.", "Tomorrow afternoon.", "In the lobby.", "By courier."],
+                answer="The finance director.",
+                explanation="사람을 묻는 질문입니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+            QuizItem(
+                prompt="Why was the shipment delayed?",
+                choices=["Because of heavy traffic.", "At the warehouse.", "Yes, it was.", "By noon."],
+                answer="Because of heavy traffic.",
+                explanation="이유를 묻는 질문입니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+        ],
+    )
+    repaired_chunk = QuizPack(
+        title="ignored",
+        mode="toeic",
+        difficulty="easy",
+        items=[
+            QuizItem(
+                prompt="Where is the meeting being held?",
+                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is.", "By email."],
+                answer="It's in the conference room.",
+                explanation="장소 질문이므로 회의실 응답이 맞습니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+            QuizItem(
+                prompt="When will the manager arrive?",
+                choices=["Tomorrow morning.", "At the station.", "Yes, he does.", "By bus."],
+                answer="Tomorrow morning.",
+                explanation="시간을 묻는 질문이므로 시간 응답이 정답입니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+            QuizItem(
+                prompt="Who approved the revised budget?",
+                choices=["The finance director.", "Tomorrow afternoon.", "In the lobby.", "By courier."],
+                answer="The finance director.",
+                explanation="사람을 묻는 질문이므로 사람 응답이 정답입니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+            QuizItem(
+                prompt="Why was the shipment delayed?",
+                choices=["Because of heavy traffic.", "At the warehouse.", "Yes, it was.", "By noon."],
+                answer="Because of heavy traffic.",
+                explanation="이유를 묻는 질문이므로 원인 응답이 정답입니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+        ],
+    )
+    fake_agent = _QueuedFakeAgent([invalid_chunk, repaired_chunk])
+    monkeypatch.setattr(jobs_module, "build_quiz_agent", lambda model: fake_agent)
+
+    pack, generation_meta = await generate_ready_pack(
+        store=store,
+        model="fake-model",
+        user_id="u1",
+        topic="Part 2 응답 패턴 훈련",
+        mode="toeic",
+        difficulty="easy",
+        item_count=4,
+        part_type="part2",
+    )
+
+    assert generation_meta["strategy"] == "llm_repair"
+    assert generation_meta["repair_attempted"] is True
+    assert generation_meta["repair_success_count"] == 1
+    assert len(pack.items) == 4
+    assert "Repair pass" in fake_agent.prompts[1]
+
+
+@pytest.mark.asyncio
+async def test_generate_ready_pack_falls_back_after_failed_repair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = SqliteStore(tmp_path / "repair-fallback.db")
+    await store.init()
+
+    invalid_chunk = QuizPack(
+        title="ignored",
+        mode="toeic",
+        difficulty="easy",
+        items=[
+            QuizItem(
+                prompt="Where is the meeting being held?",
+                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is.", "By email.", "(E) None of the above."],
+                answer="It's in the conference room.",
+                explanation="장소 질문이므로 회의실 응답이 맞습니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+        ],
+    )
+    still_invalid_chunk = QuizPack(
+        title="ignored",
+        mode="toeic",
+        difficulty="easy",
+        items=[
+            QuizItem(
+                prompt="Where is the meeting being held?",
+                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is.", "By email.", "(E) None of the above."],
+                answer="It's in the conference room.",
+                explanation="장소 질문이므로 회의실 응답이 맞습니다.",
+                skill_tags=["toeic", "part2"],
+            ),
+        ],
+    )
+    fake_agent = _QueuedFakeAgent([invalid_chunk, still_invalid_chunk])
+    monkeypatch.setattr(jobs_module, "build_quiz_agent", lambda model: fake_agent)
+
+    pack, generation_meta = await generate_ready_pack(
+        store=store,
+        model="fake-model",
+        user_id="u1",
+        topic="Part 2 응답 패턴 훈련",
+        mode="toeic",
+        difficulty="easy",
+        item_count=1,
+        part_type="part2",
+    )
+
+    assert generation_meta["strategy"] == "llm_invalid_fallback"
+    assert generation_meta["repair_attempted"] is True
+    assert generation_meta["failed_chunk_index"] == 1
+    assert generation_meta["candidate_preview"]["item_count"] == 1
+    assert generation_meta["repair_candidate_preview"]["item_count"] == 1
+    assert pack.title == "Part 2 응답 패턴 훈련"
 
 
 @pytest.mark.asyncio
