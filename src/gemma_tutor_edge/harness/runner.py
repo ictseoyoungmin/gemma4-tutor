@@ -57,11 +57,12 @@ def validate_generated_pack(
     *,
     require_english_items: bool = True,
     require_korean_explanations: bool = True,
+    minimum_item_count: int = 3,
 ) -> dict[str, Any]:
     failures: list[str] = []
     if not pack.title.strip():
         failures.append("missing_title")
-    if len(pack.items) < 3:
+    if len(pack.items) < minimum_item_count:
         failures.append("too_few_items")
     for index, item in enumerate(pack.items):
         if not item.prompt.strip():

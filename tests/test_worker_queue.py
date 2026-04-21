@@ -11,7 +11,9 @@ from gemma_tutor_edge.jobs import (
     build_toeic_ready_pack_prompt,
     enqueue_prebuild_job,
     enqueue_problem_generation_job,
+    generate_ready_pack,
     process_job,
+    split_generation_counts,
     validate_quiz_pack,
 )
 from gemma_tutor_edge.harness.runner import validate_generated_pack
@@ -22,6 +24,7 @@ from gemma_tutor_edge.storage import SqliteStore
 
 
 HANGUL_PATTERN = re.compile(r"[가-힣]")
+COUNT_PATTERN = re.compile(r"Count: (\d+)\.")
 
 
 @pytest.mark.asyncio
@@ -119,6 +122,35 @@ class _FakeAgent:
             raise self.error
         assert self.output is not None
         return _FakeAgentResult(self.output)
+
+
+class _ChunkedFakeAgent:
+    def __init__(self):
+        self.prompts: list[str] = []
+
+    async def run(self, prompt: str, deps):  # noqa: ANN001
+        self.prompts.append(prompt)
+        count_match = COUNT_PATTERN.search(prompt)
+        assert count_match is not None
+        chunk_count = int(count_match.group(1))
+        items = [
+            QuizItem(
+                prompt=f"The operations team will ___ task {index + 1}.",
+                choices=["review", "reviews", "reviewed", "reviewing"],
+                answer="review",
+                explanation="'will' 뒤에는 동사원형이 와야 하므로 'review'가 정답입니다.",
+                skill_tags=["toeic", "part7", "grammar"],
+            )
+            for index in range(chunk_count)
+        ]
+        return _FakeAgentResult(
+            QuizPack(
+                title="ignored",
+                mode="toeic",
+                difficulty="medium",
+                items=items,
+            )
+        )
 
 
 @pytest.mark.asyncio
@@ -372,6 +404,13 @@ def test_template_fallback_packs_are_part_aware_and_valid():
         )["passed"] is True
 
 
+def test_split_generation_counts_uses_5_item_chunks():
+    assert split_generation_counts(4) == [4]
+    assert split_generation_counts(5) == [5]
+    assert split_generation_counts(12) == [5, 5, 2]
+    assert split_generation_counts(20) == [5, 5, 5, 5]
+
+
 def test_toeic_ready_pack_prompt_contracts_are_part_specific():
     part2_prompt = build_toeic_ready_pack_prompt(
         topic="Part 2 응답 패턴 훈련",
@@ -417,3 +456,35 @@ def test_toeic_ready_pack_prompt_contracts_are_part_specific():
 
     assert "short reading passage such as an email, notice, memo, or article excerpt" in part7_prompt
     assert "Do not return fewer items than requested." in part7_prompt
+
+
+@pytest.mark.asyncio
+async def test_generate_ready_pack_splits_large_toeic_requests_into_chunks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    store = SqliteStore(tmp_path / "chunked-ready-pack.db")
+    await store.init()
+
+    fake_agent = _ChunkedFakeAgent()
+    monkeypatch.setattr(jobs_module, "build_quiz_agent", lambda model: fake_agent)
+
+    pack, generation_meta = await generate_ready_pack(
+        store=store,
+        model="fake-model",
+        user_id="u1",
+        topic="Part 7 독해 지문 분석",
+        mode="toeic",
+        difficulty="medium",
+        item_count=12,
+        part_type="part7",
+    )
+
+    assert generation_meta["strategy"] == "llm"
+    assert generation_meta["chunk_count"] == 3
+    assert generation_meta["requested_item_count"] == 12
+    assert len(pack.items) == 12
+    assert len(fake_agent.prompts) == 3
+    assert "chunk 1 of 3" in fake_agent.prompts[0]
+    assert "chunk 2 of 3" in fake_agent.prompts[1]
+    assert "chunk 3 of 3" in fake_agent.prompts[2]

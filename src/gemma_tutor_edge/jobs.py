@@ -13,6 +13,7 @@ from .storage import SqliteStore
 
 HANGUL_PATTERN = re.compile(r"[가-힣]")
 CHOICE_LABEL_PATTERN = re.compile(r"^\s*[\(\[]?([A-Da-d])[\)\].:-]?\s*")
+TOEIC_GENERATION_CHUNK_SIZE = 5
 
 
 async def enqueue_prebuild_job(store: SqliteStore, user_id: str, topic: str, mode: str = "grammar", difficulty: str = "medium") -> BackgroundJob:
@@ -462,16 +463,37 @@ def normalize_pack_answers(pack: QuizPack) -> QuizPack:
     return pack.model_copy(update={"items": normalized_items})
 
 
+def split_generation_counts(total_items: int, chunk_size: int = TOEIC_GENERATION_CHUNK_SIZE) -> list[int]:
+    if total_items <= chunk_size:
+        return [total_items]
+    counts: list[int] = []
+    remaining = total_items
+    while remaining > 0:
+        current = min(chunk_size, remaining)
+        counts.append(current)
+        remaining -= current
+    return counts
+
+
 def build_toeic_ready_pack_prompt(
     *,
     topic: str,
     difficulty: str,
     item_count: int,
     part_type: str,
+    chunk_index: int | None = None,
+    total_chunks: int | None = None,
 ) -> str:
+    chunk_rule = ""
+    if chunk_index is not None and total_chunks is not None:
+        chunk_rule = (
+            f"This request is chunk {chunk_index} of {total_chunks}. "
+            f"Return exactly {item_count} items for this chunk only. "
+        )
     shared_rules = (
         f'Create a TOEIC {part_type.upper()} ready pack with the exact Korean title "{topic}". '
         f"Difficulty: {difficulty}. Count: {item_count}. "
+        f"{chunk_rule}"
         "All prompts, answer choices, and correct answers must be written in English only. "
         "All explanations must be written in Korean only. "
         "Every item must have exactly 4 answer choices and the correct answer must exactly match one of those choices. "
@@ -531,11 +553,12 @@ def validate_quiz_pack(
     *,
     require_english_items: bool = False,
     require_korean_explanations: bool = False,
+    minimum_item_count: int = 3,
 ) -> list[str]:
     errors: list[str] = []
     if not pack.title.strip():
         errors.append("missing_title")
-    if len(pack.items) < 3:
+    if len(pack.items) < minimum_item_count:
         errors.append("too_few_items")
     for index, item in enumerate(pack.items):
         if not item.prompt.strip():
@@ -587,12 +610,9 @@ async def generate_ready_pack(
         agent = build_quiz_agent(model)
         deps = ContentDeps(user_id=user_id, store=store)
         if mode == "toeic":
-            prompt = build_toeic_ready_pack_prompt(
-                topic=topic,
-                difficulty=difficulty,
-                item_count=item_count,
-                part_type=part_type,
-            )
+            chunk_counts = split_generation_counts(item_count)
+            generation_meta["chunk_count"] = len(chunk_counts)
+            generation_meta["requested_item_count"] = item_count
         else:
             prompt = (
                 f'Create an English learning ready pack with the exact Korean title "{topic}". '
@@ -602,33 +622,100 @@ async def generate_ready_pack(
                 "Return a fully structured pack."
             )
         try:
-            result = await agent.run(prompt, deps=deps)
-            raw_candidate_pack = result.output.model_copy(
-                update={
-                    "title": topic,
-                    "mode": mode,
-                    "difficulty": difficulty,
-                }
-            )
-            candidate_pack = normalize_pack_answers(raw_candidate_pack)
-            validation_errors = validate_quiz_pack(
-                candidate_pack,
-                require_english_items=True,
-                require_korean_explanations=True,
-            )
-            harness_result = validate_generated_pack(
-                candidate_pack,
-                require_english_items=True,
-                require_korean_explanations=True,
-            )
-            generation_meta["validation_errors"] = validation_errors
-            generation_meta["harness"] = harness_result
-            if not validation_errors and harness_result["passed"]:
-                generation_meta["strategy"] = "llm"
-                generation_meta["validated"] = True
-                return candidate_pack, generation_meta
-            generation_meta["strategy"] = "llm_invalid_fallback"
-            generation_meta["candidate_preview"] = build_candidate_preview(raw_candidate_pack)
+            if mode == "toeic":
+                normalized_chunk_packs: list[QuizPack] = []
+                for chunk_index, chunk_count in enumerate(chunk_counts, start=1):
+                    prompt = build_toeic_ready_pack_prompt(
+                        topic=topic,
+                        difficulty=difficulty,
+                        item_count=chunk_count,
+                        part_type=part_type,
+                        chunk_index=chunk_index,
+                        total_chunks=len(chunk_counts),
+                    )
+                    result = await agent.run(prompt, deps=deps)
+                    raw_candidate_pack = result.output.model_copy(
+                        update={
+                            "title": topic,
+                            "mode": mode,
+                            "difficulty": difficulty,
+                        }
+                    )
+                    candidate_pack = normalize_pack_answers(raw_candidate_pack)
+                    validation_errors = validate_quiz_pack(
+                        candidate_pack,
+                        require_english_items=True,
+                        require_korean_explanations=True,
+                        minimum_item_count=1,
+                    )
+                    harness_result = validate_generated_pack(
+                        candidate_pack,
+                        require_english_items=True,
+                        require_korean_explanations=True,
+                        minimum_item_count=1,
+                    )
+                    if validation_errors or not harness_result["passed"]:
+                        generation_meta["validation_errors"] = validation_errors
+                        generation_meta["harness"] = harness_result
+                        generation_meta["strategy"] = "llm_invalid_fallback"
+                        generation_meta["candidate_preview"] = build_candidate_preview(raw_candidate_pack)
+                        generation_meta["failed_chunk_index"] = chunk_index
+                        generation_meta["failed_chunk_size"] = chunk_count
+                        break
+                    normalized_chunk_packs.append(candidate_pack)
+                else:
+                    merged_pack = QuizPack(
+                        title=topic,
+                        mode=mode,
+                        difficulty=difficulty,  # type: ignore[arg-type]
+                        items=[item for pack in normalized_chunk_packs for item in pack.items],
+                    )
+                    final_validation_errors = validate_quiz_pack(
+                        merged_pack,
+                        require_english_items=True,
+                        require_korean_explanations=True,
+                    )
+                    final_harness_result = validate_generated_pack(
+                        merged_pack,
+                        require_english_items=True,
+                        require_korean_explanations=True,
+                    )
+                    generation_meta["validation_errors"] = final_validation_errors
+                    generation_meta["harness"] = final_harness_result
+                    if not final_validation_errors and final_harness_result["passed"]:
+                        generation_meta["strategy"] = "llm"
+                        generation_meta["validated"] = True
+                        return merged_pack, generation_meta
+                    generation_meta["strategy"] = "llm_invalid_fallback"
+                    generation_meta["candidate_preview"] = build_candidate_preview(merged_pack)
+            else:
+                result = await agent.run(prompt, deps=deps)
+                raw_candidate_pack = result.output.model_copy(
+                    update={
+                        "title": topic,
+                        "mode": mode,
+                        "difficulty": difficulty,
+                    }
+                )
+                candidate_pack = normalize_pack_answers(raw_candidate_pack)
+                validation_errors = validate_quiz_pack(
+                    candidate_pack,
+                    require_english_items=True,
+                    require_korean_explanations=True,
+                )
+                harness_result = validate_generated_pack(
+                    candidate_pack,
+                    require_english_items=True,
+                    require_korean_explanations=True,
+                )
+                generation_meta["validation_errors"] = validation_errors
+                generation_meta["harness"] = harness_result
+                if not validation_errors and harness_result["passed"]:
+                    generation_meta["strategy"] = "llm"
+                    generation_meta["validated"] = True
+                    return candidate_pack, generation_meta
+                generation_meta["strategy"] = "llm_invalid_fallback"
+                generation_meta["candidate_preview"] = build_candidate_preview(raw_candidate_pack)
         except Exception as exc:  # noqa: BLE001
             generation_meta["strategy"] = "llm_error_fallback"
             generation_meta["error"] = str(exc)
