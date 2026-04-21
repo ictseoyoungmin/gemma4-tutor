@@ -80,12 +80,20 @@ Completed work:
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
 - improve pack generation observability around repair/chunk runs,
 - reflect slice outcomes in the `문제` tab and follow-up docs.
+
+Completed work:
+
+- exposed `llm_repair` as a distinct operator-visible strategy in the `문제` tab,
+- added repair/chunk metadata visibility such as chunk count, requested item count, failed chunk index, and repair usage,
+- added a `Repair Attempt` preview panel alongside `Failed LLM Attempt` and final saved pack preview,
+- improved operator comparison between original failed output, repair output, and final stored pack,
+- verified the frontend build after the UI polish.
 
 ## Notes
 

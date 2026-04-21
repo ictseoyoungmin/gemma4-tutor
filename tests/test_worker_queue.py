@@ -12,6 +12,7 @@ from gemma_tutor_edge.jobs import (
     enqueue_prebuild_job,
     enqueue_problem_generation_job,
     generate_ready_pack,
+    normalize_pack_answers,
     process_job,
     split_generation_counts,
     validate_quiz_pack,
@@ -467,6 +468,63 @@ def test_toeic_ready_pack_prompt_contracts_are_part_specific():
 
     assert "short reading passage such as an email, notice, memo, or article excerpt" in part7_prompt
     assert "Do not return fewer items than requested." in part7_prompt
+
+
+def test_part6_post_process_splits_malformed_choice_blob_and_normalizes_answer():
+    malformed_pack = QuizPack(
+        title="PART6 실전 팩 1",
+        mode="toeic",
+        difficulty="medium",
+        items=[
+            QuizItem(
+                prompt="All staff members ___ the mandatory safety workshop yesterday.",
+                choices=["attend,\nattending,\nattended,\nattendant],explanation:"],
+                answer="attended",
+                explanation="문장에 'yesterday'가 있으므로 과거 시제 attended가 적절합니다.",
+                skill_tags=["toeic", "part6"],
+            )
+        ],
+    )
+
+    normalized_pack = normalize_pack_answers(malformed_pack, part_type="part6")
+    normalized_item = normalized_pack.items[0]
+
+    assert normalized_item.choices == ["attend", "attending", "attended", "attendant"]
+    assert normalized_item.answer == "attended"
+
+
+def test_part7_post_process_trims_extra_choice_and_preserves_answer():
+    malformed_pack = QuizPack(
+        title="Part 7 독해 지문 분석",
+        mode="toeic",
+        difficulty="medium",
+        items=[
+            QuizItem(
+                prompt="What is the purpose of the email?",
+                choices=[
+                    "To update employees on a policy change",
+                    "To announce a new product launch",
+                    "To schedule a team meeting",
+                    "To request feedback on a project",
+                    "None of the above",
+                ],
+                answer="To update employees on a policy change",
+                explanation="이메일의 목적은 정책 변경 공지입니다.",
+                skill_tags=["toeic", "part7"],
+            )
+        ],
+    )
+
+    normalized_pack = normalize_pack_answers(malformed_pack, part_type="part7")
+    normalized_item = normalized_pack.items[0]
+
+    assert normalized_item.choices == [
+        "To update employees on a policy change",
+        "To announce a new product launch",
+        "To schedule a team meeting",
+        "To request feedback on a project",
+    ]
+    assert normalized_item.answer == "To update employees on a policy change"
 
 
 @pytest.mark.asyncio

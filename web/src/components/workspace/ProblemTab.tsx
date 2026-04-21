@@ -37,6 +37,7 @@ const difficultyLabel: Record<string, string> = {
 
 const strategyLabel: Record<string, string> = {
   llm: "LLM 생성",
+  llm_repair: "LLM Repair",
   seed_fallback: "Seed Fallback",
   llm_invalid_fallback: "검증 실패 Fallback",
   llm_error_fallback: "오류 Fallback",
@@ -45,6 +46,9 @@ const strategyLabel: Record<string, string> = {
 function getStrategyTone(strategy?: string | null) {
   if (strategy === "llm") {
     return "easy";
+  }
+  if (strategy === "llm_repair") {
+    return "medium";
   }
   if (strategy === "llm_invalid_fallback" || strategy === "llm_error_fallback") {
     return "hard";
@@ -133,6 +137,13 @@ export function ProblemTab({ userId }: { userId: string }) {
     [selectedReadyPackFailures],
   );
   const failedCandidatePreview = selectedReadyPack?.generation?.candidate_preview;
+  const repairCandidatePreview = selectedReadyPack?.generation?.repair_candidate_preview;
+  const selectedReadyPackRepairAttempted = selectedReadyPack?.generation?.repair_attempted;
+  const selectedReadyPackRepairSuccessCount = selectedReadyPack?.generation?.repair_success_count ?? 0;
+  const selectedReadyPackChunkCount = selectedReadyPack?.generation?.chunk_count;
+  const selectedReadyPackRequestedItemCount = selectedReadyPack?.generation?.requested_item_count;
+  const selectedReadyPackFailedChunkIndex = selectedReadyPack?.generation?.failed_chunk_index;
+  const selectedReadyPackFailedChunkSize = selectedReadyPack?.generation?.failed_chunk_size;
 
   useEffect(() => {
     void loadAll();
@@ -589,6 +600,10 @@ export function ProblemTab({ userId }: { userId: string }) {
                     {getStrategyLabel(selectedReadyPack.generation?.strategy)} · validation {selectedReadyPackFailures.length} · harness{" "}
                     {selectedReadyPackHarnessPassed === true ? "pass" : selectedReadyPackHarnessPassed === false ? "fail" : "-"}
                   </div>
+                  <div className="workspace-ready-pack__meta-line">
+                    chunk {selectedReadyPackChunkCount ?? "-"} · requested {selectedReadyPackRequestedItemCount ?? selectedReadyPack.pack.items.length}문항 · repair{" "}
+                    {selectedReadyPackRepairAttempted ? `attempted (${selectedReadyPackRepairSuccessCount} success)` : "not used"}
+                  </div>
                 </div>
               </div>
               {selectedReadyPack.generation ? (
@@ -598,6 +613,8 @@ export function ProblemTab({ userId }: { userId: string }) {
                     <div className="workspace-problem-failure__copy">
                       strategy: {selectedReadyPack.generation.strategy}
                       {selectedReadyPack.generation.error ? ` · error: ${selectedReadyPack.generation.error}` : ""}
+                      {selectedReadyPackFailedChunkIndex ? ` · failed chunk: ${selectedReadyPackFailedChunkIndex}` : ""}
+                      {selectedReadyPackFailedChunkSize ? ` · failed chunk size: ${selectedReadyPackFailedChunkSize}` : ""}
                     </div>
                   </div>
                   {selectedReadyPackFailureSummary.map((entry) => (
@@ -644,10 +661,42 @@ export function ProblemTab({ userId }: { userId: string }) {
                   ))}
                 </div>
               ) : null}
+              {repairCandidatePreview ? (
+                <div className="workspace-ready-pack__items">
+                  <div className="workspace-ready-pack__title-row">
+                    <div>
+                      <div className="workspace-ready-pack__title">Repair Attempt</div>
+                      <div className="workspace-ready-pack__meta-line">
+                        {repairCandidatePreview.mode} · {difficultyLabel[repairCandidatePreview.difficulty] ?? repairCandidatePreview.difficulty} · preview {repairCandidatePreview.items.length}/{repairCandidatePreview.item_count}문항
+                      </div>
+                    </div>
+                  </div>
+                  {repairCandidatePreview.items.map((item, index) => (
+                    <div key={`repair-preview-${index}`} className="workspace-ready-pack__item">
+                      <div className="workspace-ready-pack__question">Q{index + 1}. {item.prompt}</div>
+                      {item.choices.length ? (
+                        <div className="workspace-ready-pack__choices">
+                          {item.choices.map((choice) => (
+                            <div key={`${index}-repair-${choice}`} className="workspace-ready-pack__choice">
+                              {choice}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="workspace-ready-pack__feedback">answer: {item.answer}</div>
+                      <div className="workspace-ready-pack__feedback">{item.explanation}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="workspace-ready-pack__items">
                 <div className="workspace-ready-pack__title-row">
                   <div>
-                    <div className="workspace-ready-pack__title">Saved Fallback Pack</div>
+                    <div className="workspace-ready-pack__title">
+                      {selectedReadyPack.generation?.strategy === "llm" || selectedReadyPack.generation?.strategy === "llm_repair"
+                        ? "Saved Final Pack"
+                        : "Saved Fallback Pack"}
+                    </div>
                     <div className="workspace-ready-pack__meta-line">
                       UI에 저장된 최종 Ready Pack 미리보기입니다.
                     </div>

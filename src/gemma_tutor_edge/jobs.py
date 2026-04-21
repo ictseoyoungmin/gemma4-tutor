@@ -15,6 +15,8 @@ from .storage import SqliteStore
 HANGUL_PATTERN = re.compile(r"[가-힣]")
 CHOICE_LABEL_PATTERN = re.compile(r"^\s*[\(\[]?([A-Da-d])[\)\].:-]?\s*")
 TOEIC_GENERATION_CHUNK_SIZE = 5
+CHOICE_SPLIT_PATTERN = re.compile(r"\s*(?:\([A-D]\)|[A-D][\).:])\s*")
+CHOICE_METADATA_PATTERN = re.compile(r"\],?(?:explanation|prompt|skill_tags|answer)\s*:\s*$", re.IGNORECASE)
 
 
 async def enqueue_prebuild_job(store: SqliteStore, user_id: str, topic: str, mode: str = "grammar", difficulty: str = "medium") -> BackgroundJob:
@@ -430,6 +432,56 @@ def build_candidate_preview(pack: QuizPack, *, max_items: int = 3) -> dict[str, 
     }
 
 
+def cleanup_choice_text(text: str) -> str:
+    cleaned = CHOICE_METADATA_PATTERN.sub("", text).strip()
+    cleaned = cleaned.strip("[]")
+    cleaned = cleaned.strip()
+    cleaned = cleaned.rstrip(",")
+    return cleaned.strip()
+
+
+def split_choice_blob(blob: str) -> list[str]:
+    normalized_blob = blob.replace("\r", "\n")
+    if CHOICE_SPLIT_PATTERN.search(normalized_blob):
+        parts = [cleanup_choice_text(part) for part in CHOICE_SPLIT_PATTERN.split(normalized_blob) if cleanup_choice_text(part)]
+        if parts:
+            return parts
+
+    segments: list[str] = []
+    for chunk in normalized_blob.split("\n"):
+        if not chunk.strip():
+            continue
+        if "," in chunk:
+            segments.extend(cleanup_choice_text(part) for part in chunk.split(","))
+        else:
+            segments.append(cleanup_choice_text(chunk))
+    return [segment for segment in segments if segment]
+
+
+def normalize_item_choices(item: QuizItem, *, part_type: str) -> QuizItem:
+    if part_type not in {"part6", "part7"}:
+        return item
+    if not item.choices:
+        return item
+
+    normalized_choices: list[str] = []
+    for choice in item.choices:
+        split_choices = split_choice_blob(choice)
+        if len(split_choices) == 1 and split_choices[0] == cleanup_choice_text(choice):
+            normalized_choices.append(split_choices[0])
+        else:
+            normalized_choices.extend(split_choices)
+
+    deduped_choices: list[str] = []
+    for choice in normalized_choices:
+        if choice and choice not in deduped_choices:
+            deduped_choices.append(choice)
+
+    if len(deduped_choices) >= 4:
+        deduped_choices = deduped_choices[:4]
+    return item.model_copy(update={"choices": deduped_choices})
+
+
 def strip_choice_label(text: str) -> str:
     return CHOICE_LABEL_PATTERN.sub("", text).strip()
 
@@ -452,14 +504,18 @@ def normalize_answer_to_choice_text(answer: str, choices: list[str]) -> str:
     return trimmed_answer
 
 
-def normalize_pack_answers(pack: QuizPack) -> QuizPack:
+def normalize_pack_answers(pack: QuizPack, *, part_type: str) -> QuizPack:
     normalized_items = [
-        item.model_copy(
+        cleaned_item.model_copy(
             update={
-                "answer": normalize_answer_to_choice_text(item.answer, item.choices),
+                "answer": normalize_answer_to_choice_text(
+                    item.answer,
+                    cleaned_item.choices,
+                ),
             }
         )
         for item in pack.items
+        for cleaned_item in [normalize_item_choices(item, part_type=part_type)]
     ]
     return pack.model_copy(update={"items": normalized_items})
 
@@ -693,7 +749,7 @@ async def generate_ready_pack(
                             "difficulty": difficulty,
                         }
                     )
-                    candidate_pack = normalize_pack_answers(raw_candidate_pack)
+                    candidate_pack = normalize_pack_answers(raw_candidate_pack, part_type=part_type)
                     validation_errors, harness_result = evaluate_pack(
                         candidate_pack,
                         minimum_item_count=1,
@@ -718,7 +774,7 @@ async def generate_ready_pack(
                                 "difficulty": difficulty,
                             }
                         )
-                        repaired_pack = normalize_pack_answers(raw_repaired_pack)
+                        repaired_pack = normalize_pack_answers(raw_repaired_pack, part_type=part_type)
                         repair_validation_errors, repair_harness_result = evaluate_pack(
                             repaired_pack,
                             minimum_item_count=1,
@@ -770,7 +826,7 @@ async def generate_ready_pack(
                         "difficulty": difficulty,
                     }
                 )
-                candidate_pack = normalize_pack_answers(raw_candidate_pack)
+                candidate_pack = normalize_pack_answers(raw_candidate_pack, part_type=part_type)
                 validation_errors = validate_quiz_pack(
                     candidate_pack,
                     require_english_items=True,

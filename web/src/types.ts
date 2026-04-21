@@ -122,6 +122,13 @@ export type PackGenerationMeta = {
   harness: Record<string, unknown>;
   error?: string | null;
   candidate_preview?: CandidatePreview | null;
+  repair_candidate_preview?: CandidatePreview | null;
+  repair_attempted?: boolean;
+  repair_success_count?: number;
+  chunk_count?: number;
+  requested_item_count?: number;
+  failed_chunk_index?: number;
+  failed_chunk_size?: number;
 };
 
 export type ProblemInventoryResponse = {
