@@ -194,6 +194,11 @@
   transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.workspace-body.is-resizing,
+.workspace-body.is-resizing * {
+  transition: none !important;
+}
+
 .workspace-body.is-focus-mode {
   grid-template-columns: 22px minmax(0, 1fr) 22px;
 }
@@ -205,28 +210,42 @@
 
 .workspace-drawer {
   position: relative;
-  overflow: hidden;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  overflow: visible;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .workspace-sidebar {
   border-right: 1px solid var(--b0);
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .workspace-drawer.is-collapsed {
   width: 0;
-  opacity: 0;
   border-color: transparent;
+}
+
+.workspace-drawer__content {
+  height: 100%;
+  overflow: hidden;
+  transition: opacity 0.18s ease;
+}
+
+.workspace-drawer.is-collapsed .workspace-drawer__content {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.workspace-sidebar .workspace-drawer__content,
+.workspace-rail .workspace-drawer__content {
+  overflow-y: auto;
 }
 
 .workspace-drawer__toggle {
   position: absolute;
-  top: 50%;
+  top: 14px;
   z-index: 5;
-  width: 22px;
-  height: 48px;
-  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--b1);
   background: var(--bg2);
   color: var(--t2);
@@ -234,6 +253,7 @@
   font-family: "Geist Mono", monospace;
   font-size: 11px;
   transition: background 0.18s ease, color 0.18s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
 .workspace-drawer__toggle:hover {
@@ -242,21 +262,63 @@
 }
 
 .workspace-drawer__toggle--left {
-  right: 0;
-  border-right: 0;
-  border-radius: 0 6px 6px 0;
+  right: -14px;
+  border-radius: 8px;
 }
 
 .workspace-drawer__toggle--right {
-  left: 0;
-  border-left: 0;
-  border-radius: 6px 0 0 6px;
+  left: -14px;
+  border-radius: 8px;
+}
+
+.workspace-drawer.is-collapsed .workspace-drawer__toggle {
+  background: var(--bg3);
+  color: var(--a1);
+  border-color: var(--a4);
+}
+
+.workspace-drawer__resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 14px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.workspace-drawer__resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, var(--b1), transparent);
+  opacity: 0.75;
+  transition: background 0.18s ease, opacity 0.18s ease;
+}
+
+.workspace-drawer__resizer:hover::before {
+  background: linear-gradient(180deg, transparent, var(--a3), transparent);
+  opacity: 1;
+}
+
+.workspace-drawer__resizer--left {
+  right: -7px;
+}
+
+.workspace-drawer__resizer--right {
+  left: -7px;
 }
 
 .workspace-chat {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .workspace-rail__inner {
@@ -340,6 +402,9 @@
 }
 
 .workspace-chat__transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -518,6 +583,7 @@
 .workspace-chat__composer {
   padding: 10px 14px;
   border-top: 1px solid var(--b0);
+  flex-shrink: 0;
 }
 
 .workspace-chat__composer-wrap {
@@ -537,6 +603,7 @@
 .workspace-chat__textarea {
   width: 100%;
   min-height: 52px;
+  max-height: 160px;
   resize: none;
   border: 0;
   outline: 0;
@@ -563,11 +630,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  position: relative;
 }
 
 .workspace-chat__ghost {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border-radius: 7px;
   border: 1px solid var(--b1);
   background: transparent;
@@ -576,6 +644,12 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.workspace-chat__ghost.is-active,
+.workspace-chat__ghost:hover {
+  background: var(--bg3);
+  color: var(--t0);
 }
 
 .workspace-chat__send,
@@ -591,6 +665,82 @@
   color: var(--a0);
   font-size: 11px;
   font-weight: 500;
+}
+
+.workspace-chat__file-input {
+  display: none;
+}
+
+.workspace-chat__attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-chat__attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--a5);
+  background: var(--a6);
+  color: var(--a1);
+  font-size: 11px;
+}
+
+.workspace-chat__attachment-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-chat__attachment-remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.workspace-chat__model-picker {
+  position: relative;
+}
+
+.workspace-chat__model-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 180px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--b1);
+  background: var(--bg1);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 6;
+}
+
+.workspace-chat__model-option {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t1);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.workspace-chat__model-option:hover,
+.workspace-chat__model-option.is-selected {
+  background: var(--a6);
+  color: var(--a1);
 }
 
 .workspace-main {
@@ -1372,6 +1522,35 @@
   font-size: 10px;
   letter-spacing: 1.2px;
   text-transform: uppercase;
+}
+
+.workspace-ready-pack__timer-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-ready-pack__timer-toggle {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--b1);
+  background: transparent;
+  color: var(--t1);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.workspace-ready-pack__timer-toggle.is-on {
+  border-color: var(--a4);
+  background: var(--a6);
+  color: var(--a1);
+}
+
+.workspace-ready-pack__timer-display {
+  color: var(--t2);
+  font-size: 12px;
+  font-family: "Geist Mono", monospace;
 }
 
 .workspace-ready-pack__study-spacer {

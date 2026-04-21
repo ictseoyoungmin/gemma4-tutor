@@ -15,6 +15,7 @@ type StudySession = {
   result: QuizSubmitResponse | null;
   startedAt: number;
   submittedAt: number | null;
+  timerEnabled: boolean;
 };
 
 type ReviewEntry = {
@@ -73,6 +74,7 @@ export function ReadyPackPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [isLaunching, setIsLaunching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
     void loadReadyPacks();
@@ -82,6 +84,14 @@ export function ReadyPackPanel({
     onFocusModeChange?.(viewMode !== "workspace");
     return () => onFocusModeChange?.(false);
   }, [onFocusModeChange, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== "study" || !session?.timerEnabled) return;
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [session?.timerEnabled, viewMode]);
 
   const reviewEntries = useMemo(() => (session ? computeReviewEntries(session) : []), [session]);
   const currentItem = session?.launch.pack.items[session.currentIndex] ?? null;
@@ -134,6 +144,7 @@ export function ReadyPackPanel({
         result: null,
         startedAt: Date.now(),
         submittedAt: null,
+        timerEnabled: true,
       });
       setViewMode("study");
       setStatus(`${modeLabel[mode]} 시작`);
@@ -167,6 +178,10 @@ export function ReadyPackPanel({
   function handleBackToWorkspace() {
     setViewMode("workspace");
     setStatus("Ready Pack 목록으로 돌아왔습니다.");
+  }
+
+  function toggleTimer() {
+    setSession((current) => (current ? { ...current, timerEnabled: !current.timerEnabled } : current));
   }
 
   async function handleSubmitExam() {
@@ -331,6 +346,10 @@ export function ReadyPackPanel({
 
     const isFirst = session.currentIndex === 0;
     const isLast = session.currentIndex === session.launch.pack.items.length - 1;
+    const elapsedMs = Math.max(0, nowMs - session.startedAt);
+    const elapsedMinutes = Math.floor(elapsedMs / 60000);
+    const elapsedSeconds = Math.floor((elapsedMs % 60000) / 1000);
+    const recommendedMinutes = Math.max(1, Math.round(session.launch.pack.items.length * (session.mode === "exam" ? 0.75 : 0.5)));
 
     return (
       <div className="workspace-ready-pack__study-shell">
@@ -342,6 +361,18 @@ export function ReadyPackPanel({
           <div className="workspace-ready-pack__study-spacer" />
           <div className="workspace-ready-pack__study-counter">
             <strong>{session.currentIndex + 1}</strong> / {session.launch.pack.items.length}
+          </div>
+          <div className="workspace-ready-pack__timer-group">
+            <button
+              type="button"
+              className={`workspace-ready-pack__timer-toggle${session.timerEnabled ? " is-on" : ""}`}
+              onClick={toggleTimer}
+            >
+              Timer {session.timerEnabled ? "ON" : "OFF"}
+            </button>
+            <div className="workspace-ready-pack__timer-display">
+              권장 {recommendedMinutes}분 · {session.timerEnabled ? `${String(elapsedMinutes).padStart(2, "0")}:${String(elapsedSeconds).padStart(2, "0")}` : "paused"}
+            </div>
           </div>
         </div>
 

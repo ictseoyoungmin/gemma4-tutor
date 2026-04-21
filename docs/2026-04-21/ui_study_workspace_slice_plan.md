@@ -147,7 +147,7 @@ Completed work:
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
@@ -166,11 +166,17 @@ Acceptance:
 - The user can turn the timer on and off.
 - The solving state remains intact even when the timer is turned off.
 
+Completed work:
+
+- Added a recommended-time indicator to the study bar.
+- Added a visible timer on/off toggle in the focused solving UI.
+- Kept study progress intact while allowing the visible timer to pause.
+
 ### Slice 5. Tutor drawer shell
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
@@ -187,11 +193,17 @@ Acceptance:
 
 - The tutor panel collapses and reopens smoothly.[^testable-acceptance]
 
+Completed work:
+
+- Added drawer-style open/close behavior for the left tutor panel.
+- Added top-positioned handles that remain visible in collapsed state.
+- Auto-collapsed the side panels when entering focused solving mode.
+
 ### Slice 6. Tutor drawer resize
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
@@ -208,11 +220,17 @@ Acceptance:
 - The user can adjust the tutor panel width left and right.
 - The panel does not become too narrow or too wide.
 
+Completed work:
+
+- Added pointer-driven horizontal resize for both side panels.
+- Added visible vertical resize handles and resize cursor feedback.
+- Reduced drag heaviness by disabling transitions during active resizing.
+
 ### Slice 7. Chat transcript scrolling and anchored composer
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
@@ -231,11 +249,17 @@ Acceptance:
 - Even in long conversations, the input box stays in place.
 - As messages accumulate, only the transcript scrolls upward.
 
+Completed work:
+
+- Changed the tutor panel so the transcript is the only scrolling region.
+- Kept the status bar and composer anchored at the bottom.
+- Added automatic scroll-to-bottom behavior for accumulated chat messages.
+
 ### Slice 8. Compact model picker near composer actions
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
@@ -254,11 +278,17 @@ Acceptance:
 - On the default screen, the model selector occupies almost no space.
 - When clicked, the model list opens and can be selected.
 
+Completed work:
+
+- Removed the large model selector row from the tutor header.
+- Added a compact model icon button next to the composer actions.
+- Added an inline popover-style model picker near the send flow.
+
 ### Slice 9. Image upload action from clip button
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
@@ -276,11 +306,17 @@ Acceptance:
 - Clicking the clip button opens the file picker.
 - The selected image is reflected as an attached item.
 
+Completed work:
+
+- Connected the clip button to a hidden image file input.
+- Added single-image attachment state in the chat composer.
+- Added an attachment chip with remove action and helper-text feedback.
+
 ### Slice 10. Right status drawer
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
@@ -295,6 +331,12 @@ Implementation detail:
 Acceptance:
 
 - The right status panel can be collapsed and reopened.
+
+Completed work:
+
+- Added drawer-style open/close behavior for the right status panel.
+- Added a persistent top handle so it can be reopened after collapse.
+- Applied the same focused-study auto-collapse behavior used by the tutor drawer.
 
 ### Slice 11. Visual polish and responsive pass
 

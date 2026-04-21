@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { sendChatMessage } from "../../api";
 import { starterPrompts } from "./workspaceData";
 
@@ -52,29 +52,46 @@ export function TutorChatPanel({ userId }: { userId: string }) {
   const [turns, setTurns] = useState<ChatTurn[]>(initialTurns);
   const [status, setStatus] = useState("연결됨");
   const [isSending, setIsSending] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [attachment, setAttachment] = useState<File | null>(null);
   const [selectedModel, setSelectedModel] = useState<(typeof chatModelOptions)[number]["value"]>(
     "gemini-3-flash-preview",
   );
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const helperText = useMemo(() => {
     if (isSending) return "튜터가 다음 학습 흐름을 준비하고 있어요.";
     if (sessionId) return `현재 세션이 이어지고 있어요. model: ${selectedModel}`;
+    if (attachment) return `이미지 첨부됨 · ${attachment.name}`;
     return "메시지를 입력하거나 예문에 답해보세요…";
-  }, [isSending, selectedModel, sessionId]);
+  }, [attachment, isSending, selectedModel, sessionId]);
+
+  const selectedModelLabel = useMemo(
+    () => chatModelOptions.find((option) => option.value === selectedModel)?.label ?? selectedModel,
+    [selectedModel],
+  );
+
+  useEffect(() => {
+    const transcript = transcriptRef.current;
+    if (!transcript) return;
+    transcript.scrollTop = transcript.scrollHeight;
+  }, [isSending, turns]);
 
   async function handleSubmit(message: string) {
     const trimmed = message.trim();
-    if (!trimmed || isSending) return;
+    if ((!trimmed && !attachment) || isSending) return;
 
     setTurns((current) => [
       ...current,
       {
         id: `user-${Date.now()}`,
         role: "user",
-        message: trimmed,
+        message: trimmed || `[이미지 첨부] ${attachment?.name ?? ""}`,
       },
     ]);
     setDraft("");
+    setAttachment(null);
     setIsSending(true);
     setStatus(`메시지 전송 중... · ${selectedModel}`);
 
@@ -109,6 +126,21 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     }
   }
 
+  function handlePickImage() {
+    fileInputRef.current?.click();
+  }
+
+  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const nextFile = event.target.files?.[0];
+    if (!nextFile) return;
+    if (!nextFile.type.startsWith("image/")) {
+      setStatus("이미지 파일만 업로드할 수 있어요.");
+      return;
+    }
+    setAttachment(nextFile);
+    setStatus(`이미지 첨부 준비됨 · ${nextFile.name}`);
+  }
+
   return (
     <div className="workspace-chat">
       <div className="workspace-chat__top">
@@ -117,23 +149,6 @@ export function TutorChatPanel({ userId }: { userId: string }) {
           오늘 무엇을
           <br />
           연습할까요?
-        </div>
-        <div className="workspace-chat__model-row">
-          <label className="workspace-chat__model-label" htmlFor="chat-model-select">
-            Model
-          </label>
-          <select
-            id="chat-model-select"
-            className="workspace-chat__model-select"
-            value={selectedModel}
-            onChange={(event) => setSelectedModel(event.target.value as (typeof chatModelOptions)[number]["value"])}
-          >
-            {chatModelOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
         </div>
         <div className="workspace-chat__chips">
           {starterPrompts.map((prompt, index) => (
@@ -149,7 +164,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         </div>
       </div>
 
-      <div className="workspace-chat__transcript">
+      <div ref={transcriptRef} className="workspace-chat__transcript">
         {turns.map((turn) => (
           <div key={turn.id} className={`workspace-bubble-row is-${turn.role}`}>
             {turn.role === "assistant" ? (
@@ -225,6 +240,28 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         }}
       >
         <div className="workspace-chat__composer-wrap">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="workspace-chat__file-input"
+            onChange={handleImageChange}
+          />
+          {attachment ? (
+            <div className="workspace-chat__attachment-row">
+              <div className="workspace-chat__attachment-chip">
+                <span className="workspace-chat__attachment-name">{attachment.name}</span>
+                <button
+                  type="button"
+                  className="workspace-chat__attachment-remove"
+                  onClick={() => setAttachment(null)}
+                  aria-label="첨부 제거"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ) : null}
           <textarea
             className="workspace-chat__textarea"
             rows={2}
@@ -239,13 +276,43 @@ export function TutorChatPanel({ userId }: { userId: string }) {
               <button
                 type="button"
                 className="workspace-chat__ghost"
-                aria-label="학습 진단"
-                onClick={() => setDraft("학습 진단부터 시작해줘.")}
+                aria-label="이미지 첨부"
+                onClick={handlePickImage}
               >
                 <svg className="icon-sm" viewBox="0 0 24 24">
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                 </svg>
               </button>
+              <div className="workspace-chat__model-picker">
+                <button
+                  type="button"
+                  className={`workspace-chat__ghost${modelPickerOpen ? " is-active" : ""}`}
+                  aria-label={`모델 선택 · ${selectedModelLabel}`}
+                  title={selectedModelLabel}
+                  onClick={() => setModelPickerOpen((current) => !current)}
+                >
+                  <svg className="icon-sm" viewBox="0 0 24 24">
+                    <path d="M12 3l2.2 4.46L19 9.1l-3.5 3.41.83 4.82L12 15.3l-4.33 2.03.83-4.82L5 9.1l4.8-.64L12 3z" />
+                  </svg>
+                </button>
+                {modelPickerOpen ? (
+                  <div className="workspace-chat__model-popover">
+                    {chatModelOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`workspace-chat__model-option${option.value === selectedModel ? " is-selected" : ""}`}
+                        onClick={() => {
+                          setSelectedModel(option.value);
+                          setModelPickerOpen(false);
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <button type="submit" className="workspace-chat__send" disabled={isSending}>
                 {isSending ? "전송 중" : "전송"}
               </button>
