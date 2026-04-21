@@ -493,6 +493,29 @@ def test_part6_post_process_splits_malformed_choice_blob_and_normalizes_answer()
     assert normalized_item.answer == "attended"
 
 
+def test_part6_post_process_stops_before_prompt_and_skill_tag_leakage():
+    malformed_pack = QuizPack(
+        title="PART6 실전 팩 1",
+        mode="toeic",
+        difficulty="medium",
+        items=[
+            QuizItem(
+                prompt="Please submit ___ report by the end of the day.",
+                choices=["you,\nyour,\nyours,\nyourself],explanation:\nprompt:\nPlease submit ___ report by the end of the day.\nskill_tags:[\npronoun"],
+                answer="your",
+                explanation="빈칸 뒤 명사를 수식하므로 소유격 your가 필요합니다.",
+                skill_tags=["toeic", "part6"],
+            )
+        ],
+    )
+
+    normalized_pack = normalize_pack_answers(malformed_pack, part_type="part6")
+    normalized_item = normalized_pack.items[0]
+
+    assert normalized_item.choices == ["you", "your", "yours", "yourself"]
+    assert normalized_item.answer == "your"
+
+
 def test_part7_post_process_trims_extra_choice_and_preserves_answer():
     malformed_pack = QuizPack(
         title="Part 7 독해 지문 분석",
@@ -527,6 +550,40 @@ def test_part7_post_process_trims_extra_choice_and_preserves_answer():
     assert normalized_item.answer == "To update employees on a policy change"
 
 
+def test_part2_post_process_removes_none_of_the_above_choice():
+    malformed_pack = QuizPack(
+        title="Part 2 응답 패턴 훈련",
+        mode="toeic",
+        difficulty="easy",
+        items=[
+            QuizItem(
+                prompt="Where is the meeting being held?",
+                choices=[
+                    "It's in the conference room.",
+                    "At ten o'clock.",
+                    "Yes, it is.",
+                    "By email.",
+                    "(E) None of the above.",
+                ],
+                answer="It's in the conference room.",
+                explanation="장소 질문이므로 회의실 응답이 정답입니다.",
+                skill_tags=["toeic", "part2"],
+            )
+        ],
+    )
+
+    normalized_pack = normalize_pack_answers(malformed_pack, part_type="part2")
+    normalized_item = normalized_pack.items[0]
+
+    assert normalized_item.choices == [
+        "It's in the conference room.",
+        "At ten o'clock.",
+        "Yes, it is.",
+        "By email.",
+    ]
+    assert normalized_item.answer == "It's in the conference room."
+
+
 @pytest.mark.asyncio
 async def test_generate_ready_pack_repairs_invalid_chunk_once_before_fallback(
     tmp_path: Path,
@@ -542,7 +599,7 @@ async def test_generate_ready_pack_repairs_invalid_chunk_once_before_fallback(
         items=[
             QuizItem(
                 prompt="Where is the meeting being held?",
-                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is.", "By email.", "(E) None of the above."],
+                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is."],
                 answer="It's in the conference room.",
                 explanation="장소 질문이므로 회의실 응답이 맞습니다.",
                 skill_tags=["toeic", "part2"],
@@ -641,7 +698,7 @@ async def test_generate_ready_pack_falls_back_after_failed_repair(
         items=[
             QuizItem(
                 prompt="Where is the meeting being held?",
-                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is.", "By email.", "(E) None of the above."],
+                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is."],
                 answer="It's in the conference room.",
                 explanation="장소 질문이므로 회의실 응답이 맞습니다.",
                 skill_tags=["toeic", "part2"],
@@ -655,7 +712,7 @@ async def test_generate_ready_pack_falls_back_after_failed_repair(
         items=[
             QuizItem(
                 prompt="Where is the meeting being held?",
-                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is.", "By email.", "(E) None of the above."],
+                choices=["It's in the conference room.", "At ten o'clock.", "Yes, it is."],
                 answer="It's in the conference room.",
                 explanation="장소 질문이므로 회의실 응답이 맞습니다.",
                 skill_tags=["toeic", "part2"],

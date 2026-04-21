@@ -17,6 +17,7 @@ CHOICE_LABEL_PATTERN = re.compile(r"^\s*[\(\[]?([A-Da-d])[\)\].:-]?\s*")
 TOEIC_GENERATION_CHUNK_SIZE = 5
 CHOICE_SPLIT_PATTERN = re.compile(r"\s*(?:\([A-D]\)|[A-D][\).:])\s*")
 CHOICE_METADATA_PATTERN = re.compile(r"\],?(?:explanation|prompt|skill_tags|answer)\s*:\s*$", re.IGNORECASE)
+CHOICE_LEAKAGE_STOP_PATTERN = re.compile(r"(?:^|\s)(?:prompt|explanation|skill_tags|answer)\s*:\s*", re.IGNORECASE)
 
 
 async def enqueue_prebuild_job(store: SqliteStore, user_id: str, topic: str, mode: str = "grammar", difficulty: str = "medium") -> BackgroundJob:
@@ -433,7 +434,9 @@ def build_candidate_preview(pack: QuizPack, *, max_items: int = 3) -> dict[str, 
 
 
 def cleanup_choice_text(text: str) -> str:
-    cleaned = CHOICE_METADATA_PATTERN.sub("", text).strip()
+    stop_match = CHOICE_LEAKAGE_STOP_PATTERN.search(text)
+    cleaned = text[:stop_match.start()] if stop_match else text
+    cleaned = CHOICE_METADATA_PATTERN.sub("", cleaned).strip()
     cleaned = cleaned.strip("[]")
     cleaned = cleaned.strip()
     cleaned = cleaned.rstrip(",")
@@ -451,7 +454,13 @@ def split_choice_blob(blob: str) -> list[str]:
     for chunk in normalized_blob.split("\n"):
         if not chunk.strip():
             continue
-        if "," in chunk:
+        comma_split_worthwhile = (
+            chunk.count(",") >= 3
+            or "[" in chunk
+            or "]" in chunk
+            or bool(CHOICE_LEAKAGE_STOP_PATTERN.search(chunk))
+        )
+        if comma_split_worthwhile and "," in chunk:
             segments.extend(cleanup_choice_text(part) for part in chunk.split(","))
         else:
             segments.append(cleanup_choice_text(chunk))
@@ -459,7 +468,7 @@ def split_choice_blob(blob: str) -> list[str]:
 
 
 def normalize_item_choices(item: QuizItem, *, part_type: str) -> QuizItem:
-    if part_type not in {"part6", "part7"}:
+    if part_type not in {"part1", "part2", "part6", "part7"}:
         return item
     if not item.choices:
         return item
@@ -476,6 +485,13 @@ def normalize_item_choices(item: QuizItem, *, part_type: str) -> QuizItem:
     for choice in normalized_choices:
         if choice and choice not in deduped_choices:
             deduped_choices.append(choice)
+
+    if part_type in {"part1", "part2"}:
+        deduped_choices = [
+            choice
+            for choice in deduped_choices
+            if cleanup_choice_text(choice).lower() not in {"none of the above", "all of the above"}
+        ]
 
     if len(deduped_choices) >= 4:
         deduped_choices = deduped_choices[:4]

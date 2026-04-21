@@ -95,6 +95,26 @@ Completed work:
 - improved operator comparison between original failed output, repair output, and final stored pack,
 - verified the frontend build after the UI polish.
 
+### Slice 5. Part-specific post-process hardening
+
+Status:
+
+- `completed`
+
+Scope:
+
+- reduce remaining structural noise for `part1`, `part2`, `part6`, and `part7`,
+- preserve valid spoken-response choices while still repairing malformed choice blobs,
+- add regression coverage for the new cleanup heuristics.
+
+Completed work:
+
+- tightened comma-splitting heuristics so normal responses like `Yes, it is.` are preserved as one choice,
+- removed `None of the above` and similar extra distractors from `part1` and `part2` choice arrays,
+- added stronger leakage cleanup for `part6` blobs that accidentally contain `prompt:`, `skill_tags:`, `answer:`, or `explanation:` fragments,
+- kept the existing `part7` extra-choice trimming and malformed-choice recovery in the shared normalization path,
+- verified the worker regression suite with `.venv/bin/pytest tests/test_worker_queue.py` and `17 passed`.
+
 ## Notes
 
 - Start with chunking because `part7` and other larger packs are currently failing partly due to oversized single-pass requests.
