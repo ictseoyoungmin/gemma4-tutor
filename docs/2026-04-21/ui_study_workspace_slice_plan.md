@@ -342,7 +342,7 @@ Completed work:
 
 Status:
 
-- `pending`
+- `completed`
 
 Scope:
 
@@ -358,6 +358,42 @@ Implementation detail:
 Acceptance:
 
 - The main flow is stable on desktop, and the layout does not break at narrower widths.
+
+Completed work:
+
+- Added keyboard-visible focus outlines for interactive controls across the workspace shell.
+- Added responsive layout adjustments for the study screen, result summary, timer bar, and chat composer under narrower widths.
+- Reduced narrow-width breakage by collapsing key grid layouts into single-column fallbacks.
+- Applied additional visual polish to the focused study card and popover surfaces.
+
+### Slice 12. Shared study-stage transition shell
+
+Status:
+
+- `completed`
+
+Scope:
+
+- Reuse the same focused study-stage structure for both `TOEIC Part 5 Practice` and `Ready Pack 실행`.
+- Reduce differences in stage transition behavior between the two launcher buttons.
+
+Implementation detail:
+
+- Extract a shared study-shell component for the top study bar, progress handling, and centered question stage.
+- Move both practice and ready-pack flows onto the shared shell.
+- Apply focused side-panel collapse consistently when either study module is active.
+
+Acceptance:
+
+- Both launcher buttons enter a visually consistent focused study stage.
+- Shared transition scaffolding is reused instead of duplicating separate stage layouts.
+
+Completed work:
+
+- Added a shared `StudyStageShell` component for the common focused study layout.
+- Moved `ReadyPack` study/result screens onto the shared shell.
+- Moved `TOEIC Part 5 Practice` onto the same focused shell and focus-mode behavior.
+- Made both module entries clear surrounding workspace context in a more consistent way.
 
 ## State Model Draft
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchReadyPacks, launchReadyPack, submitQuizAnswers } from "../../api";
 import type { QuizItem, QuizSubmitResponse, ReadyPackLaunchResponse, ReadyQuizSummary } from "../../types";
+import { StudyStageShell } from "./StudyStageShell";
 
 type AnswerMap = Record<number, string>;
 type StudyViewMode = "workspace" | "study" | "result";
@@ -81,9 +82,9 @@ export function ReadyPackPanel({
   }, [userId]);
 
   useEffect(() => {
-    onFocusModeChange?.(viewMode !== "workspace");
+    onFocusModeChange?.(true);
     return () => onFocusModeChange?.(false);
-  }, [onFocusModeChange, viewMode]);
+  }, [onFocusModeChange]);
 
   useEffect(() => {
     if (viewMode !== "study" || !session?.timerEnabled) return;
@@ -101,7 +102,6 @@ export function ReadyPackPanel({
   const canSubmitExam = Boolean(session && session.mode === "exam" && answeredCount === totalCount && !session.result);
   const practiceRevealActive =
     Boolean(session && session.mode === "practice" && session.revealedIndexes.includes(session.currentIndex));
-  const selectedPack = packs.find((pack) => pack.ready_pack_id === selectedPackId) ?? null;
   const resultSummary = useMemo(() => {
     if (!session) return null;
     const correct = reviewEntries.filter((entry) => entry.isCorrect).length;
@@ -277,22 +277,8 @@ export function ReadyPackPanel({
 
   function renderWorkspaceView() {
     return (
-      <div className="workspace-ready-pack__layout">
-        <div className="workspace-ready-pack__list">{renderPackList()}</div>
-        <div className="workspace-ready-pack__workspace workspace-ready-pack__workspace--intro">
-          <div className="workspace-ready-pack__study-copy">
-            <div className="workspace-ready-pack__study-eyebrow">Solve Flow</div>
-            <div className="workspace-ready-pack__title">{selectedPack?.title ?? "Ready Pack 선택"}</div>
-            <div className="workspace-ready-pack__meta-line">
-              {selectedPack
-                ? `${selectedPack.mode} · ${difficultyLabel[selectedPack.difficulty] ?? selectedPack.difficulty}`
-                : "왼쪽 팩 목록에서 시작할 문제를 고르세요."}
-            </div>
-            <p className="workspace-ready-pack__summary">
-              `문제 풀기`는 실전형으로 전체 문항을 모두 푼 뒤 한 번에 제출합니다. `연습`은 각 문항을 고르는 즉시 정답과 해설을 확인하면서 진행할 수 있습니다.
-            </p>
-          </div>
-        </div>
+      <div className="workspace-ready-pack__launcher-grid">
+        {renderPackList()}
       </div>
     );
   }
@@ -352,17 +338,17 @@ export function ReadyPackPanel({
     const recommendedMinutes = Math.max(1, Math.round(session.launch.pack.items.length * (session.mode === "exam" ? 0.75 : 0.5)));
 
     return (
-      <div className="workspace-ready-pack__study-shell">
-        <div className="workspace-ready-pack__study-bar">
-          <button type="button" className="workspace-ready-pack__back-btn" onClick={handleBackToWorkspace}>
-            ← 목록으로
-          </button>
-          <div className="workspace-ready-pack__study-pill">{modeLabel[session.mode]}</div>
-          <div className="workspace-ready-pack__study-spacer" />
-          <div className="workspace-ready-pack__study-counter">
+      <StudyStageShell
+        modeLabel={modeLabel[session.mode]}
+        onBack={handleBackToWorkspace}
+        counter={
+          <>
             <strong>{session.currentIndex + 1}</strong> / {session.launch.pack.items.length}
-          </div>
-          <div className="workspace-ready-pack__timer-group">
+          </>
+        }
+        progress={((session.currentIndex + 1) / session.launch.pack.items.length) * 100}
+        timer={
+          <>
             <button
               type="button"
               className={`workspace-ready-pack__timer-toggle${session.timerEnabled ? " is-on" : ""}`}
@@ -373,17 +359,9 @@ export function ReadyPackPanel({
             <div className="workspace-ready-pack__timer-display">
               권장 {recommendedMinutes}분 · {session.timerEnabled ? `${String(elapsedMinutes).padStart(2, "0")}:${String(elapsedSeconds).padStart(2, "0")}` : "paused"}
             </div>
-          </div>
-        </div>
-
-        <div className="workspace-ready-pack__study-progress">
-          <div
-            className="workspace-ready-pack__study-progress-fill"
-            style={{ width: `${((session.currentIndex + 1) / session.launch.pack.items.length) * 100}%` }}
-          />
-        </div>
-
-        <div className="workspace-ready-pack__focus-stage">
+          </>
+        }
+      >
           <div key={`${session.launch.quiz_id}-${session.currentIndex}-${viewMode}`} className="workspace-ready-pack__question-card workspace-ready-pack__question-card--focus">
             <div className="workspace-ready-pack__question-type">
               {session.launch.pack.mode} · {difficultyLabel[session.launch.pack.difficulty]}
@@ -460,8 +438,7 @@ export function ReadyPackPanel({
               )}
             </div>
           </div>
-        </div>
-      </div>
+      </StudyStageShell>
     );
   }
 
@@ -470,17 +447,6 @@ export function ReadyPackPanel({
 
     return (
       <div className="workspace-ready-pack__result-shell">
-        <div className="workspace-ready-pack__study-bar">
-          <button type="button" className="workspace-ready-pack__back-btn" onClick={handleBackToWorkspace}>
-            ← 목록으로
-          </button>
-          <div className="workspace-ready-pack__study-pill">결과 리뷰</div>
-          <div className="workspace-ready-pack__study-spacer" />
-          <div className="workspace-ready-pack__study-counter">
-            {session.currentIndex + 1} / {session.launch.pack.items.length}
-          </div>
-        </div>
-
         <div className="workspace-ready-pack__result-summary">
           <article className="workspace-ready-pack__result-stat">
             <div className="workspace-ready-pack__result-value">{resultSummary.scorePercent}%</div>
@@ -500,7 +466,11 @@ export function ReadyPackPanel({
           </article>
         </div>
 
-        <div className="workspace-ready-pack__focus-stage">
+        <StudyStageShell
+          modeLabel="결과 리뷰"
+          onBack={handleBackToWorkspace}
+          counter={`${session.currentIndex + 1} / ${session.launch.pack.items.length}`}
+        >
           <div key={`${session.launch.quiz_id}-result-${session.currentIndex}`} className="workspace-ready-pack__question-card workspace-ready-pack__question-card--focus">
             <div className="workspace-ready-pack__question-type">Review</div>
             <div className="workspace-ready-pack__question">{currentReviewEntry.item.prompt}</div>
@@ -551,7 +521,7 @@ export function ReadyPackPanel({
               </button>
             </div>
           </div>
-        </div>
+        </StudyStageShell>
       </div>
     );
   }

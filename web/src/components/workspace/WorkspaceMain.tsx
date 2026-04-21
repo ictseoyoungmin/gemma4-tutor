@@ -82,7 +82,7 @@ export function WorkspaceMain({
 
   function renderActiveModule() {
     if (activeModule === "toeic-practice") {
-      return <PracticePanel userId={userId} />;
+      return <PracticePanel userId={userId} onFocusModeChange={onReadyPackFocusChange} onClose={() => setActiveModule("dashboard")} />;
     }
 
     if (activeModule === "ready-pack") {
@@ -119,6 +119,33 @@ export function WorkspaceMain({
     return (
       <main className="workspace-main">
         <ReadyPackPanel userId={userId} onFocusModeChange={onReadyPackFocusChange} />
+      </main>
+    );
+  }
+
+  if (activeModule !== "dashboard") {
+    return (
+      <main className="workspace-main">
+        <section className="workspace-panel workspace-module-stage workspace-fade-in workspace-module-stage--full">
+          <div className="workspace-panel__head">
+            <div>
+              <div className="workspace-panel__title">{activeModule === "ready-pack" ? "Ready Pack 실행" : "TOEIC 연습"}</div>
+              <div className="workspace-module-stage__subcopy">
+                {activeModule === "ready-pack"
+                  ? "저장된 퀴즈 팩을 고르고 바로 집중 학습 흐름으로 들어갑니다."
+                  : "연습 모듈을 단독 화면으로 열어 더 집중해서 진행합니다."}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="workspace-module-stage__close"
+              onClick={() => setActiveModule("dashboard")}
+            >
+              대시보드로
+            </button>
+          </div>
+          {renderActiveModule()}
+        </section>
       </main>
     );
   }
@@ -216,22 +243,6 @@ export function WorkspaceMain({
           ))}
         </div>
       </section>
-
-      {activeModule !== "dashboard" ? (
-        <section className="workspace-fade-in">
-          <div className="workspace-section-head">
-            <div className="workspace-section-head__label">선택한 연습 모듈</div>
-            <button
-              type="button"
-              className="workspace-section-head__action"
-              onClick={() => setActiveModule("dashboard")}
-            >
-              닫기 →
-            </button>
-          </div>
-          {renderActiveModule()}
-        </section>
-      ) : null}
 
       <section className="workspace-fade-in">
         <div className="workspace-section-head">
