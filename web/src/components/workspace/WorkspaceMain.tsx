@@ -130,10 +130,12 @@ export function WorkspaceMain({
           <div className="workspace-panel__head">
             <button
               type="button"
-              className="workspace-module-stage__back"
+              className="workspace-module-stage__back workspace-ready-pack__back-btn--icon"
               onClick={() => setActiveModule("dashboard")}
+              aria-label="뒤로 가기"
+              title="뒤로 가기"
             >
-              ← 학습 공간으로
+              ←
             </button>
             <div className="workspace-panel__title">{activeModule === "ready-pack" ? "Ready Pack 실행" : "TOEIC 연습"}</div>
           </div>
