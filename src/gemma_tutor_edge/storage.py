@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import aiosqlite
+from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 
 from .schemas import (
     AchievementCard,
@@ -160,6 +161,16 @@ class SqliteStore:
                 )
                 """
             )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS chat_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    messages_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
             await db.commit()
 
     async def seed_placeholders(self, user_id: str) -> None:
@@ -252,6 +263,33 @@ class SqliteStore:
             )
             for row in rows
         ]
+
+    async def load_chat_history(self, user_id: str, session_id: str) -> list[ModelMessage]:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT messages_json
+                FROM chat_sessions
+                WHERE user_id = ? AND session_id = ?
+                """,
+                (user_id, session_id),
+            )
+            row = await cursor.fetchone()
+        if row is None or not row[0]:
+            return []
+        return ModelMessagesTypeAdapter.validate_json(row[0])
+
+    async def save_chat_history(self, user_id: str, session_id: str, messages_json: bytes | str) -> None:
+        payload = messages_json.decode("utf-8") if isinstance(messages_json, bytes) else messages_json
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO chat_sessions(session_id, user_id, messages_json, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (session_id, user_id, payload, datetime.utcnow().isoformat()),
+            )
+            await db.commit()
 
     async def save_quiz_pack(self, user_id: str, quiz_id: str, pack: QuizPack) -> None:
         async with aiosqlite.connect(self.db_path) as db:

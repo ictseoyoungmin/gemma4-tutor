@@ -37,8 +37,8 @@ from .toeic import TOEIC_ITEMS, get_item_by_id, select_next_item
 
 async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> ChatResponse:
     selected_model = build_model_for_name(get_settings(), request.model_name) if request.model_name else model
+    session_id = request.session_id or uuid4().hex
     if selected_model == "test":
-        session_id = request.session_id or uuid4().hex
         return ChatResponse(
             session_id=session_id,
             run_id=f"test-{uuid4().hex[:8]}",
@@ -52,8 +52,9 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
         )
     agent = build_tutor_agent(selected_model)
     deps = TutorDeps(user_id=request.user_id, store=store)
-    session_id = request.session_id or uuid4().hex
-    result = await agent.run(request.message, deps=deps)
+    message_history = await store.load_chat_history(request.user_id, session_id)
+    result = await agent.run(request.message, deps=deps, message_history=message_history)
+    await store.save_chat_history(request.user_id, session_id, result.all_messages_json())
     for item in result.output.memory_to_store:
         await store.add_memory(request.user_id, item)
     return ChatResponse(

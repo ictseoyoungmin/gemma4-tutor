@@ -40,11 +40,15 @@ const initialTurns: ChatTurn[] = [
   },
 ];
 
+
 const chatModelOptions = [
-  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
-  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Lite" },
+  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)" },
+  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Lite (Preview)" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "gemma-4-26b-a4b-it", label: "Gemma 4 26B (MoE)" },
+  // { value: "gemma-4-e4b-it", label: "Gemma 4 E4B (Mobile Optimized)" },
 ] as const;
+
 
 export function TutorChatPanel({ userId }: { userId: string }) {
   const [draft, setDraft] = useState(starterDrafts["TOEIC Part 5"]);
