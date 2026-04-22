@@ -49,6 +49,8 @@ const chatModelOptions = [
   // { value: "gemma-4-e4b-it", label: "Gemma 4 E4B (Mobile Optimized)" },
 ] as const;
 
+const AUTO_SCROLL_THRESHOLD_PX = 48;
+
 
 export function TutorChatPanel({ userId }: { userId: string }) {
   const [draft, setDraft] = useState(starterDrafts["TOEIC Part 5"]);
@@ -63,6 +65,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
   );
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const shouldStickToBottomRef = useRef(true);
 
   const helperText = useMemo(() => {
     if (isSending) return "튜터가 다음 학습 흐름을 준비하고 있어요.";
@@ -79,8 +82,17 @@ export function TutorChatPanel({ userId }: { userId: string }) {
   useEffect(() => {
     const transcript = transcriptRef.current;
     if (!transcript) return;
+    if (!shouldStickToBottomRef.current) return;
     transcript.scrollTop = transcript.scrollHeight;
   }, [isSending, turns]);
+
+  function updateAutoScrollState() {
+    const transcript = transcriptRef.current;
+    if (!transcript) return;
+    const distanceFromBottom =
+      transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight;
+    shouldStickToBottomRef.current = distanceFromBottom <= AUTO_SCROLL_THRESHOLD_PX;
+  }
 
   function buildImageLearningMessage(summary: {
     scene_summary: string;
@@ -104,6 +116,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     const trimmed = message.trim();
     if ((!trimmed && !attachment) || isSending) return;
     const currentAttachment = attachment;
+    shouldStickToBottomRef.current = true;
 
     setTurns((current) => [
       ...current,
@@ -205,7 +218,11 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         </div>
       </div>
 
-      <div ref={transcriptRef} className="workspace-chat__transcript">
+      <div
+        ref={transcriptRef}
+        className="workspace-chat__transcript"
+        onScroll={updateAutoScrollState}
+      >
         {turns.map((turn) => (
           <div key={turn.id} className={`workspace-bubble-row is-${turn.role}`}>
             {turn.role === "assistant" ? (

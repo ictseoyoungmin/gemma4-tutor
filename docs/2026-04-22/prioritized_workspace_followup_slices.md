@@ -79,7 +79,14 @@ Mobile web notes:
 
 Status:
 
-- `pending`
+- `completed`
+
+Completed work:
+
+- Replaced unconditional transcript auto-scroll with a near-bottom policy.
+- Preserved the learner's scroll position while reading older messages.
+- Re-enabled bottom sticking when the learner actively sends a new message, so their own message and the next reply remain visible.
+- Kept the change lightweight so it behaves consistently on both desktop and mobile web transcript scrolling.
 
 ## Slice 3. Persist Drawer Width and Collapse Preferences
 
