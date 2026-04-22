@@ -11,7 +11,7 @@ export default function App() {
 }
 
 const pageStyle: React.CSSProperties = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background: "#050403",
-  padding: 16,
+  padding: 0,
 };

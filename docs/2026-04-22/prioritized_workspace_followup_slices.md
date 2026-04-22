@@ -112,7 +112,21 @@ Mobile web notes:
 
 Status:
 
-- `pending`
+- `completed as mobile discomfort pass`
+
+Adjusted scope:
+
+- Instead of implementing persistence right now, this slice was narrowed to mobile-web usability fixes only.
+- The drawer feature already exists, so the goal became reducing layout pressure and awkward navigation behavior on narrow screens.
+
+Completed work:
+
+- Changed mobile workspace layout so side drawers no longer consume the main content grid width.
+- Made mobile drawers behave like overlays, keeping the center content readable.
+- Collapsed both side drawers automatically when first entering a mobile-sized viewport.
+- Ensured opening one mobile drawer closes the other, reducing cramped multi-panel states.
+- Added a tap-to-close mobile backdrop for opened side drawers.
+- Converted the top navigation tabs into a horizontal scrollable row on mobile to avoid cramped multi-line wrapping.
 
 ## Slice 4. Ready Pack Session State Refactor
 
