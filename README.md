@@ -26,40 +26,95 @@ This scaffold is designed for the **Gemma 4 Impact Challenge** style workflow:
 - docs for architecture, evaluation, and submission planning
 - PowerShell and shell scripts for Windows/Linux workflows
 
-## Recommended workflow
-
-### 1) Development mode
-Use Gemini API for faster iteration while UI, tool design, prompts, and contracts are unstable.
-
-```powershell
-$env:GEMINI_API_KEY = "..."
-$env:LLM_BACKEND = "google"
-uvicorn gemma_tutor_edge.app:app --reload
-```
-
-### 2) System test mode
-Once flows are stable, switch to `llama.cpp` without changing the API routes or agent tool contracts.
-
-```powershell
-$env:LLM_BACKEND = "llama_cpp"
-$env:LLAMA_BASE_URL = "http://127.0.0.1:8080/v1"
-$env:LLAMA_MODEL = "gemma-4-e2b-it"
-uvicorn gemma_tutor_edge.app:app --reload
-```
-
 ## Quickstart
 
-### Install
+### Recommended: Docker Compose dev
+
+Copy `.env.compose.example` to `.env` and then run:
+
+```bash
+docker compose up --build api web
+```
+
+Expected local endpoints:
+
+- API: `http://127.0.0.1:8000`
+- Web: `http://127.0.0.1:5173`
+
+This compose baseline currently covers:
+
+- FastAPI backend
+- Vite frontend
+
+The local `llama.cpp` service is planned as the next compose slice.
+
+### Runtime switching
+
+Hosted Gemini mode:
+
+```env
+LLM_BACKEND=google
+GOOGLE_MODEL=gemini-3-flash-preview
+GEMINI_API_KEY=...
+```
+
+Local `llama.cpp` mode:
+
+```env
+LLM_BACKEND=llama_cpp
+LLAMA_BASE_URL=http://llama:8080/v1
+LLAMA_MODEL=gemma-4-e2b-it
+```
+
+The application routes stay the same in both modes.
+
+### Gemma 4 model download helper
+
+Model downloads are intentionally separated from the app runtime environment.
+
+Create a dedicated download environment:
+
+```bash
+python3 -m venv .venv_hug
+source .venv_hug/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "huggingface_hub[cli]"
+```
+
+Then run:
+
+```bash
+./scripts/download_gemma4.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\download_gemma4.ps1
+```
+
+Expected model files:
+
+- `~/models/gemma-4-E2B-it-Q4_K_M.gguf`
+- `~/models/mmproj-F16.gguf`
+
+### Legacy local fallback (`.venv`)
+
+`docker compose` is now the recommended development path.
+
+The older `.venv` path is still useful as a fallback when:
+
+- Docker is unavailable
+- you want to run quick local tests without containers
+- you need a temporary direct-debug workflow
+
+Fallback install:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e .[dev]
 ```
-
-### Environment
-
-Copy `.env.example` to `.env` and edit values.
 
 ### Start API
 
@@ -102,6 +157,7 @@ Windows PowerShell:
 - `LLAMA_API_KEY`: placeholder for OpenAI-compatible servers, default `local-not-required`
 - `LLAMA_MODEL`: logical model ID served by `llama.cpp`
 - `APP_DB_PATH`: SQLite database path
+- `APP_STORAGE_DIR`: storage directory for local artifacts
 
 ## Notes on backend switching
 
@@ -110,13 +166,14 @@ This project keeps the **same Pydantic-AI agent structure** while swapping the m
 - Google path uses the Gemini API via API key based auth.
 - `llama.cpp` path uses an OpenAI-compatible `/v1/chat/completions` endpoint.
 
-## Verified Local Dev Setup
+## Current Dev Baseline
 
-The current repository has been validated with:
+The repository currently supports:
 
-- `.venv` for backend execution
-- FastAPI app running through `scripts/run_dev_api.sh`
-- Gemini-backed `/v1/chat` working with a valid `GEMINI_API_KEY`
+- `docker compose` for `api` + `web`
+- `.venv_hug` for model downloads
+- `.venv` as a fallback path
+- Gemini-backed `/v1/chat`
 - Node.js 20 and npm 10 for the `web/` Vite dashboard
 
 If the frontend fails to start, check `node --version` first. `Vite 5` requires `Node.js 18+`.
