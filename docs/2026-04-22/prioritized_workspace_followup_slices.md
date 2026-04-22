@@ -151,7 +151,15 @@ Mobile web notes:
 
 Status:
 
-- `pending`
+- `completed`
+
+Completed work:
+
+- Consolidated `selectedPackId`, `viewMode`, and `session` transitions into a local reducer inside `ReadyPackPanel`.
+- Moved launch, answer selection, navigation, timer toggle, practice finish, exam submit, and back-to-workspace transitions into explicit actions.
+- Reduced scattered ad-hoc state updates while keeping the current learner flow unchanged.
+- Kept the refactor local to the Ready Pack module so the existing UI and mobile layout work remained stable.
+- Verified the web build after the state refactor.
 
 ## Slice 5. Attachment Model Expansion
 

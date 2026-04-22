@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { fetchReadyPacks, launchReadyPack, submitQuizAnswers } from "../../api";
 import type { QuizItem, QuizSubmitResponse, ReadyPackLaunchResponse, ReadyQuizSummary } from "../../types";
 import { StudyStageShell } from "./StudyStageShell";
@@ -18,6 +18,22 @@ type StudySession = {
   submittedAt: number | null;
   timerEnabled: boolean;
 };
+
+type FlowState = {
+  selectedPackId: string | null;
+  viewMode: StudyViewMode;
+  session: StudySession | null;
+};
+
+type FlowAction =
+  | { type: "select_pack"; readyPackId: string | null }
+  | { type: "launch_session"; readyPackId: string; mode: StudyMode; launch: ReadyPackLaunchResponse; startedAt: number }
+  | { type: "select_answer"; choice: string }
+  | { type: "navigate"; index: number }
+  | { type: "toggle_timer" }
+  | { type: "submit_exam"; result: QuizSubmitResponse; submittedAt: number }
+  | { type: "finish_practice"; submittedAt: number }
+  | { type: "back_to_workspace" };
 
 type ReviewEntry = {
   item: QuizItem;
@@ -119,6 +135,100 @@ function computeReviewEntries(session: StudySession): ReviewEntry[] {
   });
 }
 
+const initialFlowState: FlowState = {
+  selectedPackId: null,
+  viewMode: "workspace",
+  session: null,
+};
+
+function readyPackFlowReducer(state: FlowState, action: FlowAction): FlowState {
+  switch (action.type) {
+    case "select_pack":
+      return { ...state, selectedPackId: action.readyPackId };
+    case "launch_session":
+      return {
+        selectedPackId: action.readyPackId,
+        viewMode: "study",
+        session: {
+          mode: action.mode,
+          launch: action.launch,
+          answers: {},
+          currentIndex: 0,
+          revealedIndexes: [],
+          result: null,
+          startedAt: action.startedAt,
+          submittedAt: null,
+          timerEnabled: true,
+        },
+      };
+    case "select_answer": {
+      if (!state.session || state.session.result) return state;
+      const nextAnswers = {
+        ...state.session.answers,
+        [state.session.currentIndex]: action.choice,
+      };
+      const nextRevealedIndexes =
+        state.session.mode === "practice" && !state.session.revealedIndexes.includes(state.session.currentIndex)
+          ? [...state.session.revealedIndexes, state.session.currentIndex]
+          : state.session.revealedIndexes;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          answers: nextAnswers,
+          revealedIndexes: nextRevealedIndexes,
+        },
+      };
+    }
+    case "navigate":
+      if (!state.session) return state;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          currentIndex: action.index,
+        },
+      };
+    case "toggle_timer":
+      if (!state.session) return state;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          timerEnabled: !state.session.timerEnabled,
+        },
+      };
+    case "submit_exam":
+      if (!state.session) return state;
+      return {
+        ...state,
+        viewMode: "result",
+        session: {
+          ...state.session,
+          result: action.result,
+          submittedAt: action.submittedAt,
+        },
+      };
+    case "finish_practice":
+      if (!state.session) return state;
+      return {
+        ...state,
+        viewMode: "result",
+        session: {
+          ...state.session,
+          submittedAt: action.submittedAt,
+        },
+      };
+    case "back_to_workspace":
+      return {
+        ...state,
+        viewMode: "workspace",
+      };
+    default:
+      return state;
+  }
+}
+
 export function ReadyPackPanel({
   userId,
   onFocusModeChange,
@@ -127,14 +237,13 @@ export function ReadyPackPanel({
   onFocusModeChange?: (focused: boolean) => void;
 }) {
   const [packs, setPacks] = useState<ReadyQuizSummary[]>([]);
-  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<StudyViewMode>("workspace");
-  const [session, setSession] = useState<StudySession | null>(null);
+  const [flowState, dispatch] = useReducer(readyPackFlowReducer, initialFlowState);
   const [status, setStatus] = useState("Ready Pack 불러오는 중...");
   const [isLoading, setIsLoading] = useState(true);
   const [isLaunching, setIsLaunching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
+  const { selectedPackId, session, viewMode } = flowState;
 
   useEffect(() => {
     void loadReadyPacks();
@@ -179,7 +288,10 @@ export function ReadyPackPanel({
       setIsLoading(true);
       const nextPacks = await fetchReadyPacks(userId);
       setPacks(nextPacks);
-      setSelectedPackId((current) => current ?? nextPacks[0]?.ready_pack_id ?? null);
+      dispatch({
+        type: "select_pack",
+        readyPackId: selectedPackId ?? nextPacks[0]?.ready_pack_id ?? null,
+      });
       setStatus(nextPacks.length ? "Ready Pack 준비됨" : "준비된 Ready Pack이 아직 없습니다");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Ready Pack을 가져오지 못했습니다.");
@@ -192,20 +304,14 @@ export function ReadyPackPanel({
     try {
       setIsLaunching(true);
       setStatus(mode === "exam" ? "실전 문제풀이 세션을 여는 중..." : "연습 세션을 여는 중...");
-      setSelectedPackId(readyPackId);
       const launched = await launchReadyPack(userId, readyPackId);
-      setSession({
+      dispatch({
+        type: "launch_session",
+        readyPackId,
         mode,
         launch: launched,
-        answers: {},
-        currentIndex: 0,
-        revealedIndexes: [],
-        result: null,
         startedAt: Date.now(),
-        submittedAt: null,
-        timerEnabled: true,
       });
-      setViewMode("study");
       setStatus(`${modeLabel[mode]} 시작`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Ready Pack 실행에 실패했습니다.");
@@ -215,32 +321,20 @@ export function ReadyPackPanel({
   }
 
   function handleSelectAnswer(choice: string) {
-    setSession((current) => {
-      if (!current || current.result) return current;
-      const nextAnswers = { ...current.answers, [current.currentIndex]: choice };
-      const nextRevealedIndexes =
-        current.mode === "practice" && !current.revealedIndexes.includes(current.currentIndex)
-          ? [...current.revealedIndexes, current.currentIndex]
-          : current.revealedIndexes;
-      return {
-        ...current,
-        answers: nextAnswers,
-        revealedIndexes: nextRevealedIndexes,
-      };
-    });
+    dispatch({ type: "select_answer", choice });
   }
 
   function handleNavigate(index: number) {
-    setSession((current) => (current ? { ...current, currentIndex: index } : current));
+    dispatch({ type: "navigate", index });
   }
 
   function handleBackToWorkspace() {
-    setViewMode("workspace");
+    dispatch({ type: "back_to_workspace" });
     setStatus("Ready Pack 목록으로 돌아왔습니다.");
   }
 
   function toggleTimer() {
-    setSession((current) => (current ? { ...current, timerEnabled: !current.timerEnabled } : current));
+    dispatch({ type: "toggle_timer" });
   }
 
   async function handleSubmitExam() {
@@ -250,16 +344,7 @@ export function ReadyPackPanel({
       setIsSubmitting(true);
       const orderedAnswers = session.launch.pack.items.map((_, index) => session.answers[index] ?? "");
       const submitted = await submitQuizAnswers(userId, session.launch.quiz_id, orderedAnswers);
-      setSession((current) =>
-        current
-          ? {
-              ...current,
-              result: submitted,
-              submittedAt: Date.now(),
-            }
-          : current,
-      );
-      setViewMode("result");
+      dispatch({ type: "submit_exam", result: submitted, submittedAt: Date.now() });
       setStatus(`채점 완료 · ${submitted.correct}/${submitted.total}`);
       void loadReadyPacks();
     } catch (error) {
@@ -271,15 +356,7 @@ export function ReadyPackPanel({
 
   function handleFinishPractice() {
     if (!session) return;
-    setSession((current) =>
-      current
-        ? {
-            ...current,
-            submittedAt: Date.now(),
-          }
-        : current,
-    );
-    setViewMode("result");
+    dispatch({ type: "finish_practice", submittedAt: Date.now() });
     setStatus("연습 결과를 확인하세요.");
   }
 
@@ -305,7 +382,7 @@ export function ReadyPackPanel({
         <button
           type="button"
           className="workspace-pack__body workspace-pack__body--selectable"
-          onClick={() => setSelectedPackId(pack.ready_pack_id)}
+          onClick={() => dispatch({ type: "select_pack", readyPackId: pack.ready_pack_id })}
         >
           <div className="workspace-pack__name">{pack.title}</div>
           <div className="workspace-ready-pack__card-stats">
