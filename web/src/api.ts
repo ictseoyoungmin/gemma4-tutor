@@ -3,6 +3,7 @@ import type {
   DashboardDetail,
   DeleteResourceResponse,
   HarnessRunResponse,
+  ImageAnalysisResponse,
   ProblemGenerationResponse,
   ProblemInventoryResponse,
   PracticeItemDetail,
@@ -206,6 +207,31 @@ export async function sendChatMessage(
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`Failed to send chat message: ${response.status} ${detail}`);
+  }
+  return response.json();
+}
+
+export async function analyzeChatImage(
+  userId: string,
+  file: File,
+  prompt?: string | null,
+  modelName?: string | null,
+): Promise<ImageAnalysisResponse> {
+  const formData = new FormData();
+  formData.append("user_id", userId);
+  formData.append("prompt", prompt?.trim() || "Analyze this image and turn it into English learning material.");
+  formData.append("file", file);
+  if (modelName) {
+    formData.append("model_name", modelName);
+  }
+
+  const response = await fetch(`${API_BASE}/v1/image/analyze`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to analyze image: ${response.status} ${detail}`);
   }
   return response.json();
 }

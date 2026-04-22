@@ -273,6 +273,7 @@ async def worker_stop():
 async def image_analyze(
     user_id: str = Form(...),
     prompt: str = Form("Analyze this image and turn it into English learning material."),
+    model_name: str | None = Form(None),
     file: UploadFile = File(...),
 ):
     try:
@@ -284,6 +285,7 @@ async def image_analyze(
             prompt=prompt,
             image_bytes=content,
             media_type=file.content_type or "image/png",
+            model_name=model_name,
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc

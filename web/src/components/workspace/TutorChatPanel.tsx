@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { sendChatMessage } from "../../api";
+import { analyzeChatImage, sendChatMessage } from "../../api";
 import { starterPrompts } from "./workspaceData";
 
 type ChatTurn = {
@@ -82,37 +82,74 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     transcript.scrollTop = transcript.scrollHeight;
   }, [isSending, turns]);
 
+  function buildImageLearningMessage(summary: {
+    scene_summary: string;
+    vocabulary: string[];
+    suggested_question_types: string[];
+    generated_prompt_seed: string;
+  }) {
+    return [
+      `Scene: ${summary.scene_summary}`,
+      summary.vocabulary.length ? `Vocabulary: ${summary.vocabulary.join(", ")}` : "",
+      summary.suggested_question_types.length
+        ? `Try next: ${summary.suggested_question_types.join(", ")}`
+        : "",
+      `Prompt seed: ${summary.generated_prompt_seed}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   async function handleSubmit(message: string) {
     const trimmed = message.trim();
     if ((!trimmed && !attachment) || isSending) return;
+    const currentAttachment = attachment;
 
     setTurns((current) => [
       ...current,
       {
         id: `user-${Date.now()}`,
         role: "user",
-        message: trimmed || `[이미지 첨부] ${attachment?.name ?? ""}`,
+        message: currentAttachment ? `${trimmed || "이미지 학습 요청"}\n[이미지 첨부] ${currentAttachment.name}` : trimmed,
       },
     ]);
     setDraft("");
     setAttachment(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setIsSending(true);
     setStatus(`메시지 전송 중... · ${selectedModel}`);
 
     try {
-      const response = await sendChatMessage(userId, trimmed, sessionId, selectedModel);
-      setSessionId(response.session_id);
-      setTurns((current) => [
-        ...current,
-        {
-          id: response.run_id,
-          role: "assistant",
-          message: response.output.message,
-          meta: `intent: ${response.output.detected_intent}`, //· model: ${selectedModel}
-          suggestions: response.output.suggested_next_actions,
-        },
-      ]);
-      setStatus(`응답 수신 완료 · ${selectedModel}`);
+      if (currentAttachment) {
+        const response = await analyzeChatImage(userId, currentAttachment, trimmed, selectedModel);
+        setTurns((current) => [
+          ...current,
+          {
+            id: `image-${Date.now()}`,
+            role: "assistant",
+            message: buildImageLearningMessage(response),
+            meta: "intent: image_learning",
+            suggestions: response.suggested_question_types.slice(0, 3),
+          },
+        ]);
+        setStatus(`이미지 학습 응답 완료 · ${selectedModel}`);
+      } else {
+        const response = await sendChatMessage(userId, trimmed, sessionId, selectedModel);
+        setSessionId(response.session_id);
+        setTurns((current) => [
+          ...current,
+          {
+            id: response.run_id,
+            role: "assistant",
+            message: response.output.message,
+            meta: `intent: ${response.output.detected_intent}`,
+            suggestions: response.output.suggested_next_actions,
+          },
+        ]);
+        setStatus(`응답 수신 완료 · ${selectedModel}`);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       setTurns((current) => [
@@ -258,7 +295,12 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                 <button
                   type="button"
                   className="workspace-chat__attachment-remove"
-                  onClick={() => setAttachment(null)}
+                  onClick={() => {
+                    setAttachment(null);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
+                  }}
                   aria-label="첨부 제거"
                 >
                   ×

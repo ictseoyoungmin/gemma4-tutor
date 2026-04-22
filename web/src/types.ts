@@ -194,6 +194,13 @@ export type ChatResponse = {
   usage: Record<string, unknown>;
 };
 
+export type ImageAnalysisResponse = {
+  scene_summary: string;
+  vocabulary: string[];
+  suggested_question_types: string[];
+  generated_prompt_seed: string;
+};
+
 export type QuizSubmitResponse = {
   quiz_id: string;
   total: number;

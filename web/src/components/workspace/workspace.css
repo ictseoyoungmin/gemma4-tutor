@@ -733,6 +733,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .workspace-chat__attachment-chip {
@@ -749,7 +750,7 @@
 }
 
 .workspace-chat__attachment-name {
-  max-width: 180px;
+  max-width: min(180px, 60vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2779,9 +2780,24 @@
 
   .workspace-chat__actions {
     justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   .workspace-chat__model-popover {
     min-width: 160px;
+  }
+
+  .workspace-chat__ghost {
+    width: 36px;
+    height: 36px;
+  }
+
+  .workspace-chat__send {
+    min-height: 36px;
+    padding: 7px 14px;
+  }
+
+  .workspace-chat__attachment-name {
+    max-width: 56vw;
   }
 }

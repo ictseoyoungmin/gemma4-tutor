@@ -192,8 +192,10 @@ async def analyze_image(
     prompt: str,
     image_bytes: bytes,
     media_type: str,
+    model_name: str | None = None,
 ) -> ImageAnalysisResponse:
-    agent = build_vision_agent(model)
+    selected_model = build_model_for_name(get_settings(), model_name) if model_name else model
+    agent = build_vision_agent(selected_model)
     deps = ContentDeps(user_id=user_id, store=store)
     return await run_image_analysis(agent, prompt, image_bytes, media_type, deps)
 
