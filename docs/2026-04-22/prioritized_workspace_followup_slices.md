@@ -183,7 +183,15 @@ Mobile web notes:
 
 Status:
 
-- `pending`
+- `completed`
+
+Completed work:
+
+- Moved tutor chat attachment state from a single-file shape to an array-based attachment model.
+- Updated the composer attachment UI to render from the attachment list instead of a single hard-coded slot.
+- Kept the current learner flow stable by preserving the existing single-image upload behavior while making the state shape expansion-ready.
+- Added attachment preview URL lifecycle handling so thumbnail rendering remains clean and disposable.
+- Kept the attachment presentation compact enough for narrow mobile layouts.
 
 ## Slice 1 Kickoff Note
 

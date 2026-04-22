@@ -767,12 +767,32 @@
   align-items: center;
   gap: 8px;
   max-width: 100%;
-  padding: 5px 9px;
-  border-radius: 999px;
+  padding: 6px 10px;
+  border-radius: 18px;
   border: 1px solid var(--a5);
   background: var(--a6);
   color: var(--a1);
   font-size: 11px;
+}
+
+.workspace-chat__attachment-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.workspace-chat__attachment-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .workspace-chat__attachment-name {
@@ -3003,5 +3023,10 @@
 
   .workspace-chat__attachment-name {
     max-width: 56vw;
+  }
+
+  .workspace-chat__attachment-thumb {
+    width: 40px;
+    height: 40px;
   }
 }

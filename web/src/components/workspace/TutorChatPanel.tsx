@@ -10,6 +10,12 @@ type ChatTurn = {
   suggestions?: string[];
 };
 
+type ChatAttachment = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
 const starterDrafts: Record<string, string> = {
   "TOEIC Part 5": "TOEIC Part 5 팁 하나 짧게 알려줘.",
   "문장 교정": "이 문장 교정해줘: I am agree with the plan.",
@@ -59,20 +65,21 @@ export function TutorChatPanel({ userId }: { userId: string }) {
   const [status, setStatus] = useState("연결됨");
   const [isSending, setIsSending] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
-  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [selectedModel, setSelectedModel] = useState<(typeof chatModelOptions)[number]["value"]>(
     "gemini-3-flash-preview",
   );
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
+  const primaryAttachment = attachments[0] ?? null;
 
   const helperText = useMemo(() => {
     if (isSending) return "튜터가 다음 학습 흐름을 준비하고 있어요.";
     if (sessionId) return `현재 세션이 이어지고 있어요. model: ${selectedModel}`;
-    if (attachment) return `이미지 첨부됨 · ${attachment.name}`;
+    if (primaryAttachment) return `이미지 첨부됨 · ${primaryAttachment.file.name}`;
     return "메시지를 입력하거나 예문에 답해보세요…";
-  }, [attachment, isSending, selectedModel, sessionId]);
+  }, [isSending, primaryAttachment, selectedModel, sessionId]);
 
   const selectedModelLabel = useMemo(
     () => chatModelOptions.find((option) => option.value === selectedModel)?.label ?? selectedModel,
@@ -85,6 +92,12 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     if (!shouldStickToBottomRef.current) return;
     transcript.scrollTop = transcript.scrollHeight;
   }, [isSending, turns]);
+
+  useEffect(() => {
+    return () => {
+      attachments.forEach((attachment) => URL.revokeObjectURL(attachment.previewUrl));
+    };
+  }, [attachments]);
 
   function updateAutoScrollState() {
     const transcript = transcriptRef.current;
@@ -114,8 +127,9 @@ export function TutorChatPanel({ userId }: { userId: string }) {
 
   async function handleSubmit(message: string) {
     const trimmed = message.trim();
-    if ((!trimmed && !attachment) || isSending) return;
-    const currentAttachment = attachment;
+    if ((!trimmed && attachments.length === 0) || isSending) return;
+    const currentAttachments = attachments;
+    const currentAttachment = currentAttachments[0] ?? null;
     shouldStickToBottomRef.current = true;
 
     setTurns((current) => [
@@ -123,11 +137,14 @@ export function TutorChatPanel({ userId }: { userId: string }) {
       {
         id: `user-${Date.now()}`,
         role: "user",
-        message: currentAttachment ? `${trimmed || "이미지 학습 요청"}\n[이미지 첨부] ${currentAttachment.name}` : trimmed,
+        message: currentAttachment
+          ? `${trimmed || "이미지 학습 요청"}\n[이미지 첨부] ${currentAttachment.file.name}`
+          : trimmed,
       },
     ]);
     setDraft("");
-    setAttachment(null);
+    setAttachments([]);
+    currentAttachments.forEach((attachment) => URL.revokeObjectURL(attachment.previewUrl));
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -136,7 +153,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
 
     try {
       if (currentAttachment) {
-        const response = await analyzeChatImage(userId, currentAttachment, trimmed, selectedModel);
+        const response = await analyzeChatImage(userId, currentAttachment.file, trimmed, selectedModel);
         setTurns((current) => [
           ...current,
           {
@@ -191,7 +208,16 @@ export function TutorChatPanel({ userId }: { userId: string }) {
       setStatus("이미지 파일만 업로드할 수 있어요.");
       return;
     }
-    setAttachment(nextFile);
+    setAttachments((current) => {
+      current.forEach((attachment) => URL.revokeObjectURL(attachment.previewUrl));
+      return [
+        {
+          id: `${nextFile.name}-${nextFile.size}-${Date.now()}`,
+          file: nextFile,
+          previewUrl: URL.createObjectURL(nextFile),
+        },
+      ];
+    });
     setStatus(`이미지 첨부 준비됨 · ${nextFile.name}`);
   }
 
@@ -305,24 +331,40 @@ export function TutorChatPanel({ userId }: { userId: string }) {
             className="workspace-chat__file-input"
             onChange={handleImageChange}
           />
-          {attachment ? (
+          {attachments.length ? (
             <div className="workspace-chat__attachment-row">
-              <div className="workspace-chat__attachment-chip">
-                <span className="workspace-chat__attachment-name">{attachment.name}</span>
-                <button
-                  type="button"
-                  className="workspace-chat__attachment-remove"
-                  onClick={() => {
-                    setAttachment(null);
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = "";
-                    }
-                  }}
-                  aria-label="첨부 제거"
-                >
-                  ×
-                </button>
-              </div>
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="workspace-chat__attachment-chip">
+                  <div className="workspace-chat__attachment-thumb">
+                    <img
+                      src={attachment.previewUrl}
+                      alt={attachment.file.name}
+                      className="workspace-chat__attachment-image"
+                    />
+                  </div>
+                  <span className="workspace-chat__attachment-name">{attachment.file.name}</span>
+                  <button
+                    type="button"
+                    className="workspace-chat__attachment-remove"
+                    onClick={() => {
+                      setAttachments((current) => {
+                        const next = current.filter((item) => item.id !== attachment.id);
+                        const removed = current.find((item) => item.id === attachment.id);
+                        if (removed) {
+                          URL.revokeObjectURL(removed.previewUrl);
+                        }
+                        if (next.length === 0 && fileInputRef.current) {
+                          fileInputRef.current.value = "";
+                        }
+                        return next;
+                      });
+                    }}
+                    aria-label="첨부 제거"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
           ) : null}
           <textarea
