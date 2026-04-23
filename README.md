@@ -38,15 +38,14 @@ docker compose up --build api web
 
 Expected local endpoints:
 
-- API: `http://127.0.0.1:8000`
+- API: `http://127.0.0.1:8009`
 - Web: `http://127.0.0.1:5173`
 
 This compose baseline currently covers:
 
 - FastAPI backend
 - Vite frontend
-
-The local `llama.cpp` service is planned as the next compose slice.
+- optional local `llama.cpp` service for Gemma 4
 
 ### Runtime switching
 
@@ -63,7 +62,7 @@ Local `llama.cpp` mode:
 ```env
 LLM_BACKEND=llama_cpp
 LLAMA_BASE_URL=http://llama:8080/v1
-LLAMA_MODEL=gemma-4-e2b-it
+LLAMA_MODEL=gemma-4-E2B-it-Q4_K_M.gguf
 ```
 
 The application routes stay the same in both modes.
@@ -78,6 +77,27 @@ VALIDATE_LLAMA_ASSETS=true
 ```
 
 Use `VALIDATE_LLAMA_ASSETS=true` when the app should fail fast if the local Gemma 4 files are missing. Keep it `false` when `llama.cpp` is externally managed and the app container cannot see host model files directly.
+
+### Compose local Gemma 4 mode
+
+Set the host model directory in `.env` before starting the local stack:
+
+```env
+LLM_BACKEND=llama_cpp
+HOST_MODEL_DIR=/absolute/path/to/your/models
+LLAMA_BASE_URL=http://llama:8080/v1
+LLAMA_MODEL=gemma-4-E2B-it-Q4_K_M.gguf
+LLAMA_GGUF_PATH=/models/gemma-4-E2B-it-Q4_K_M.gguf
+LLAMA_MMPROJ_PATH=/models/mmproj-F16.gguf
+```
+
+Then run:
+
+```bash
+docker compose up --build llama api web
+```
+
+The `llama` container mounts `HOST_MODEL_DIR` at `/models` and serves the Gemma 4 GGUF plus `mmproj` through an OpenAI-compatible endpoint used by the API container.
 
 ### Gemma 4 model download helper
 
@@ -179,6 +199,7 @@ Windows PowerShell:
 - `LLAMA_BASE_URL`: OpenAI-compatible base URL, usually `http://127.0.0.1:8080/v1`
 - `LLAMA_API_KEY`: placeholder for OpenAI-compatible servers, default `local-not-required`
 - `LLAMA_MODEL`: logical model ID served by `llama.cpp`
+- `HOST_MODEL_DIR`: host directory mounted into the Compose `llama` container
 - `MODEL_DIR`: default local model directory, used for asset path resolution
 - `LLAMA_GGUF_PATH`: optional explicit GGUF file path for local validation
 - `LLAMA_MMPROJ_PATH`: optional explicit multimodal projector path for local validation

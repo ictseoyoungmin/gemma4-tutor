@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     llama_base_url: str = "http://127.0.0.1:8080/v1"
     llama_api_key: str = "local-not-required"
-    llama_model: str = "gemma-4-e2b-it"
+    llama_model: str = "gemma-4-E2B-it-Q4_K_M.gguf"
     llama_vision_enabled: bool = True
     model_dir: Path = Field(default_factory=lambda: Path.home() / "models")
     llama_gguf_path: Path | None = None

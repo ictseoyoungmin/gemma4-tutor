@@ -188,6 +188,10 @@ Priority:
 
 - `P0`
 
+Status:
+
+- `completed` on 2026-04-23
+
 Objective:
 
 - Add a real `llama` service to Compose and connect the backend to it without changing API routes.
@@ -217,6 +221,45 @@ Deliverables:
 - updated `docker-compose.yml`
 - compose-oriented env template updates
 - documented local Gemma 4 container workflow
+
+Completed work:
+
+- Added a real `llama` service to `docker-compose.yml` using the official `ghcr.io/ggml-org/llama.cpp:server` image.
+- Mounted the host model directory into the `llama` container at `/models`.
+- Wired the `llama` service command to launch Gemma 4 with the multimodal projector:
+  - `-m /models/gemma-4-E2B-it-Q4_K_M.gguf`
+  - `--mmproj /models/mmproj-F16.gguf`
+- Updated the `api` service so local-mode Compose runs explicitly set:
+  - `LLM_BACKEND`
+  - `LLAMA_BASE_URL`
+  - `LLAMA_MODEL`
+  - `MODEL_DIR`
+  - `LLAMA_GGUF_PATH`
+  - `LLAMA_MMPROJ_PATH`
+  - `VALIDATE_LLAMA_ASSETS`
+- Mounted the same host model directory into the `api` container so optional asset validation can work in Compose as well.
+- Updated the default local `LLAMA_MODEL` value to match the actually served `llama.cpp` model name:
+  - `gemma-4-E2B-it-Q4_K_M.gguf`
+- Updated `.env.compose.example` with:
+  - `HOST_MODEL_DIR`
+  - compose-local Gemma 4 defaults
+- Updated `README.md` with a Compose-first local Gemma 4 startup path.
+
+Validation notes:
+
+- Rendered Compose successfully with:
+  - `HOST_MODEL_DIR=/home/ubuntu/models LLM_BACKEND=llama_cpp LLAMA_MODEL=gemma-4-E2B-it-Q4_K_M.gguf docker compose config`
+- Started the integrated local stack successfully with:
+  - `HOST_MODEL_DIR=/home/ubuntu/models LLM_BACKEND=llama_cpp LLAMA_MODEL=gemma-4-E2B-it-Q4_K_M.gguf docker compose up -d --build llama api`
+- Verified running services with `docker compose ps`:
+  - `llama` was `healthy`
+  - `api` was `Up`
+- Verified Compose API health:
+  - `GET http://127.0.0.1:8009/v1/health` returned `backend=llama_cpp`
+- Verified real container-to-container inference by calling:
+  - `POST http://127.0.0.1:8009/v1/chat`
+- Result:
+  - the `api` container successfully reached the `llama` container through Compose networking and returned a valid tutor response.
 
 ### Slice 4. Backend Runtime Cleanup For Local/Hosted Consistency
 
