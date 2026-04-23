@@ -51,6 +51,7 @@ const chatModelOptions = [
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)", backend: "google" },
   { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Lite (Preview)", backend: "google" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", backend: "google" },
+  { value: "gemma-4-26b-a4b-it", label: "Gemma 4 26B", backend: "google" },
   { value: "gemma-4-E2B-it-Q4_K_M.gguf", label: "Gemma 4 E2B Local", backend: "llama_cpp" },
 ] as const;
 
@@ -137,7 +138,11 @@ export function TutorChatPanel({ userId }: { userId: string }) {
           }
           return "gemini-3-flash-preview";
         });
-        setStatus(`연결됨 · ${nextRuntime.backend === "llama_cpp" ? "Local Gemma 4" : "Hosted Gemini"}`);
+        const initialModelLabel =
+          nextRuntime.backend === "llama_cpp"
+            ? nextRuntime.model_name
+            : availableModelOptions.find((option) => option.value === selectedModel)?.label ?? "Gemini 3 Flash (Preview)";
+        setStatus(`연결됨 · ${initialModelLabel}`);
       } catch (error) {
         if (cancelled) return;
         setStatus(error instanceof Error ? error.message : "Runtime 상태를 확인하지 못했습니다.");
@@ -319,7 +324,8 @@ export function TutorChatPanel({ userId }: { userId: string }) {
             </button>
           ))}
         </div>
-        <div className="workspace-chat__runtime-row">
+        {/*중복 표기로 사용할 필요*/}
+        {/* <div className="workspace-chat__runtime-row">
           <div className={`workspace-chat__runtime-badge is-${runtimeBackend}`}>
             {runtimeBadgeLabel}
           </div>
@@ -328,7 +334,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
               ? "UI is locked to the served local model."
               : "Choose a hosted Gemini model for this session."}
           </div>
-        </div>
+        </div>*/}
       </div>
 
       <div
@@ -498,6 +504,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                         onClick={() => {
                           setSelectedModel(option.value);
                           setModelPickerOpen(false);
+                          setStatus(`연결됨 · ${option.label}`);
                         }}
                       >
                         {option.label}

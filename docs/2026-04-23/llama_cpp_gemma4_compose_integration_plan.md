@@ -409,6 +409,10 @@ Priority:
 
 - `P2`
 
+Status:
+
+- `completed` on 2026-04-23
+
 Objective:
 
 - Make the local workflow repeatable and easier to diagnose.
@@ -440,6 +444,42 @@ Deliverables:
 - compose healthchecks
 - smoke-test helper commands or scripts
 - README workflow consolidation
+
+Completed work:
+
+- Added explicit Compose healthchecks for:
+  - `llama`
+  - `api`
+- Updated `web` so it now waits on `api` with `condition: service_healthy`.
+- Kept the local Gemma 4 path Compose-first and documented the expected readiness check through `docker compose ps`.
+- Added repeatable local smoke-test scripts:
+  - `scripts/smoke_test_local_llama.sh`
+  - `scripts/smoke_test_local_llama.ps1`
+- The smoke test now exercises:
+  - `GET /v1/health`
+  - `POST /v1/chat`
+  - `POST /v1/image/analyze`
+- Consolidated the README local Gemma 4 workflow into a shorter sequence:
+  - set `.env`
+  - run `docker compose up --build llama api web`
+  - verify service health
+  - run the smoke test
+
+Validation notes:
+
+- Rendered Compose successfully after the healthcheck changes with:
+  - `HOST_MODEL_DIR=/home/ubuntu/models LLM_BACKEND=llama_cpp LLAMA_MODEL=gemma-4-E2B-it-Q4_K_M.gguf docker compose config`
+- Verified the new smoke-test workflow by running:
+  - `bash scripts/smoke_test_local_llama.sh`
+- Result:
+  - health check succeeded
+  - chat smoke test succeeded
+  - image smoke test succeeded
+- Refreshed the running Compose stack and confirmed:
+  - `api` -> `healthy`
+  - `llama` -> `healthy`
+- Note:
+  - `web` restart was blocked by an already-used host `5173` port in the current environment, but this did not affect Slice 6 acceptance for Compose healthchecks, API readiness, or the local smoke-test workflow.
 
 ## Recommended Execution Order
 

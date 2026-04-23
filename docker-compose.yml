@@ -17,6 +17,12 @@ services:
       - 0.0.0.0
       - --port
       - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
 
   api:
     build:
@@ -46,6 +52,12 @@ services:
     ports:
       - "8009:8009"
     command: ["uvicorn", "gemma_tutor_edge.app:app", "--host", "0.0.0.0", "--port", "8009", "--reload"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8009/v1/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
 
   web:
     build:
@@ -59,10 +71,12 @@ services:
       - ./web:/app/web
       - web_node_modules:/app/web/node_modules
     ports:
-      - "5173:5173"
+      - "5174:5174"
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
+
   web_node_modules:

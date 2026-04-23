@@ -47,6 +47,13 @@ This compose baseline currently covers:
 - Vite frontend
 - optional local `llama.cpp` service for Gemma 4
 
+For the shortest repeatable local Gemma 4 path, use:
+
+1. set `HOST_MODEL_DIR` and `LLM_BACKEND=llama_cpp` in `.env`
+2. run `docker compose up --build llama api web`
+3. wait for `docker compose ps` to show `llama` and `api` as healthy
+4. run `./scripts/smoke_test_local_llama.sh`
+
 ### Runtime switching
 
 Hosted Gemini mode:
@@ -98,6 +105,35 @@ docker compose up --build llama api web
 ```
 
 The `llama` container mounts `HOST_MODEL_DIR` at `/models` and serves the Gemma 4 GGUF plus `mmproj` through an OpenAI-compatible endpoint used by the API container.
+
+Check service readiness:
+
+```bash
+docker compose ps
+```
+
+Expected state:
+
+- `llama`: `healthy`
+- `api`: `healthy`
+
+Run the end-to-end local smoke test:
+
+```bash
+./scripts/smoke_test_local_llama.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\smoke_test_local_llama.ps1
+```
+
+The smoke test verifies:
+
+- `GET /v1/health`
+- `POST /v1/chat`
+- `POST /v1/image/analyze`
 
 ### Gemma 4 model download helper
 
