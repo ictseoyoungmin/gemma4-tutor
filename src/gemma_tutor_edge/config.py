@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     llama_model: str = "gemma-4-E2B-it-Q4_K_M.gguf"
     llama_vision_enabled: bool = True
     llama_chat_thinking_enabled: bool = False
-    llama_chat_max_tokens: int = 320
+    llama_chat_max_tokens: int = 8400
     llama_chat_temperature: float | None = None
     model_dir: Path = Field(default_factory=lambda: Path.home() / "models")
     llama_gguf_path: Path | None = None

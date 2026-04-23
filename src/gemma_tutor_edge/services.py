@@ -18,6 +18,7 @@ from .jobs import enqueue_problem_generation_job
 from .llm import build_model_for_name, resolve_backend_for_model_name
 from .schemas import (
     ChatRequest,
+    TutorResponse,
     ChatResponse,
     DeleteResourceResponse,
     ImageAnalysisResponse,

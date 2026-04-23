@@ -33,7 +33,7 @@ services:
       - .env
     environment:
       APP_HOST: 0.0.0.0
-      APP_PORT: 8009
+      APP_PORT: 8000
       APP_DB_PATH: /app/data/gemma_tutor_edge.db
       APP_STORAGE_DIR: /app/data/storage
       LLM_BACKEND: ${LLM_BACKEND:-google}
@@ -50,10 +50,10 @@ services:
       - ./README.md:/app/README.md:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
     ports:
-      - "8009:8009"
-    command: ["uvicorn", "gemma_tutor_edge.app:app", "--host", "0.0.0.0", "--port", "8009", "--reload"]
+      - "8000:8000"
+    command: ["uvicorn", "gemma_tutor_edge.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8009/v1/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/v1/health"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -65,13 +65,13 @@ services:
       dockerfile: Dockerfile.web
     working_dir: /app/web
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-http://127.0.0.1:8009}
+      VITE_API_BASE: ${VITE_API_BASE:-http://api:8000}
       CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ./web:/app/web
       - web_node_modules:/app/web/node_modules
     ports:
-      - "5174:5174"
+      - "5173:5173"
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
     depends_on:
       api:
