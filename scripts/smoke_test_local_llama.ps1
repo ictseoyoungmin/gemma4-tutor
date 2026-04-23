@@ -23,6 +23,13 @@ try {
     Write-Host ""
     Write-Host ""
 
+    Write-Host "== Chat stream smoke test =="
+    & curl.exe -N -fsS -X POST "$ApiBase/v1/chat/stream" `
+      -H "Content-Type: application/json" `
+      -d "{""user_id"":""$UserId"",""message"":""Give me one short English study tip."",""model_name"":""$ModelName""}"
+    Write-Host ""
+    Write-Host ""
+
     Write-Host "== Image smoke test =="
     & curl.exe -fsS -X POST "$ApiBase/v1/image/analyze" `
       -F "user_id=$UserId" `

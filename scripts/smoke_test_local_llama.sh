@@ -21,6 +21,13 @@ curl -fsS -X POST "${API_BASE}/v1/chat" \
 echo
 echo
 
+echo "== Chat stream smoke test =="
+curl -N -fsS -X POST "${API_BASE}/v1/chat/stream" \
+  -H "Content-Type: application/json" \
+  -d "{\"user_id\":\"${USER_ID}\",\"message\":\"Give me one short English study tip.\",\"model_name\":\"${MODEL_NAME}\"}"
+echo
+echo
+
 echo "== Image smoke test =="
 curl -fsS -X POST "${API_BASE}/v1/image/analyze" \
   -F "user_id=${USER_ID}" \

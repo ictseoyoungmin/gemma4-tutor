@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from time import perf_counter
 from uuid import uuid4
 
 from .agents import build_quiz_agent, build_tutor_agent, build_vision_agent, run_image_analysis
@@ -38,7 +40,12 @@ from .toeic import TOEIC_ITEMS, get_item_by_id, select_next_item
 async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> ChatResponse:
     settings = get_settings()
     selected_model = build_model_for_name(settings, request.model_name) if request.model_name else model
+    selected_backend = resolve_backend_for_model_name(settings, request.model_name)
+    active_model_name = request.model_name or (
+        settings.llama_model if selected_backend == "llama_cpp" else settings.google_model
+    )
     session_id = request.session_id or uuid4().hex
+    started_at = perf_counter()
     if selected_model == "test":
         return ChatResponse(
             session_id=session_id,
@@ -49,21 +56,189 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
                 "memory_to_store": [],
                 "suggested_next_actions": ["Part 5 문제 풀기", "Ready Pack 확인"],
             },
+            diagnostics={
+                "backend": "test",
+                "model_name": "test",
+                "history_messages": 0,
+                "streaming": False,
+                "total_elapsed_ms": 0,
+            },
             usage={},
         )
     agent = build_tutor_agent(selected_model)
     deps = TutorDeps(user_id=request.user_id, store=store)
     message_history = await store.load_chat_history(request.user_id, session_id)
-    result = await agent.run(request.message, deps=deps, message_history=message_history)
+    result = await agent.run(
+        request.message,
+        deps=deps,
+        message_history=message_history,
+        model_settings=_build_chat_model_settings(selected_backend),
+    )
     await store.save_chat_history(request.user_id, session_id, result.all_messages_json())
     for item in result.output.memory_to_store:
         await store.add_memory(request.user_id, item)
+    elapsed_ms = round((perf_counter() - started_at) * 1000, 1)
+    response_message = getattr(result, "response", None)
     return ChatResponse(
         session_id=session_id,
         run_id=result.run_id,
         output=result.output,
+        reasoning=getattr(response_message, "thinking", None),
+        diagnostics={
+            "backend": selected_backend,
+            "model_name": getattr(response_message, "model_name", None) or active_model_name,
+            "history_messages": len(message_history),
+            "streaming": False,
+            "total_elapsed_ms": elapsed_ms,
+        },
         usage=result.usage().opentelemetry_attributes(),
     )
+
+
+def _build_chat_model_settings(selected_backend: str) -> dict[str, object] | None:
+    if selected_backend != "llama_cpp":
+        return None
+    return {
+        "thinking": True,
+        "extra_body": {
+            "reasoning_format": "auto",
+        },
+    }
+
+
+async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
+    settings = get_settings()
+    selected_model = build_model_for_name(settings, request.model_name) if request.model_name else model
+    selected_backend = resolve_backend_for_model_name(settings, request.model_name)
+    active_model_name = request.model_name or (
+        settings.llama_model if selected_backend == "llama_cpp" else settings.google_model
+    )
+    session_id = request.session_id or uuid4().hex
+
+    if selected_model == "test":
+        async def test_stream():
+            yield _ndjson(
+                {
+                    "type": "metadata",
+                    "session_id": session_id,
+                    "backend": "test",
+                    "model_name": "test",
+                }
+            )
+            yield _ndjson({"type": "message_delta", "delta": "테스트 튜터 응답입니다. 다음 학습으로 짧은 TOEIC 문제를 풀어보세요."})
+            yield _ndjson(
+                {
+                    "type": "final",
+                    "response": ChatResponse(
+                        session_id=session_id,
+                        run_id=f"test-{uuid4().hex[:8]}",
+                        output={
+                            "message": "테스트 튜터 응답입니다. 다음 학습으로 짧은 TOEIC 문제를 풀어보세요.",
+                            "detected_intent": "chat",
+                            "memory_to_store": [],
+                            "suggested_next_actions": ["Part 5 문제 풀기", "Ready Pack 확인"],
+                        },
+                        diagnostics={
+                            "backend": "test",
+                            "model_name": "test",
+                            "history_messages": 0,
+                            "streaming": True,
+                            "first_chunk_ms": 0,
+                            "total_elapsed_ms": 0,
+                        },
+                        usage={},
+                    ).model_dump(mode="json"),
+                }
+            )
+
+        return test_stream()
+
+    agent = build_tutor_agent(selected_model)
+    deps = TutorDeps(user_id=request.user_id, store=store)
+    message_history = await store.load_chat_history(request.user_id, session_id)
+    model_settings = _build_chat_model_settings(selected_backend)
+
+    async def event_stream():
+        started_at = perf_counter()
+        first_chunk_ms: float | None = None
+        previous_message = ""
+        previous_reasoning = ""
+
+        yield _ndjson(
+            {
+                "type": "metadata",
+                "session_id": session_id,
+                "backend": selected_backend,
+                "model_name": active_model_name,
+            }
+        )
+
+        try:
+            async with agent.run_stream(
+                request.message,
+                deps=deps,
+                message_history=message_history,
+                model_settings=model_settings,
+            ) as result:
+                async for response, _is_last in result.stream_responses(debounce_by=None):
+                    current_message = response.text or ""
+                    current_reasoning = response.thinking or ""
+
+                    if first_chunk_ms is None and (current_message or current_reasoning):
+                        first_chunk_ms = round((perf_counter() - started_at) * 1000, 1)
+                        yield _ndjson({"type": "metrics", "first_chunk_ms": first_chunk_ms})
+
+                    if current_reasoning != previous_reasoning:
+                        reasoning_delta = (
+                            current_reasoning[len(previous_reasoning):]
+                            if current_reasoning.startswith(previous_reasoning)
+                            else current_reasoning
+                        )
+                        if reasoning_delta:
+                            yield _ndjson({"type": "reasoning_delta", "delta": reasoning_delta})
+                        previous_reasoning = current_reasoning
+
+                    if current_message != previous_message:
+                        message_delta = (
+                            current_message[len(previous_message):]
+                            if current_message.startswith(previous_message)
+                            else current_message
+                        )
+                        if message_delta:
+                            yield _ndjson({"type": "message_delta", "delta": message_delta})
+                        previous_message = current_message
+
+                output = await result.get_output()
+                await store.save_chat_history(request.user_id, session_id, result.all_messages_json())
+                for item in output.memory_to_store:
+                    await store.add_memory(request.user_id, item)
+
+                total_elapsed_ms = round((perf_counter() - started_at) * 1000, 1)
+                response_message = result.response
+                final_response = ChatResponse(
+                    session_id=session_id,
+                    run_id=result.run_id,
+                    output=output,
+                    reasoning=getattr(response_message, "thinking", None),
+                    diagnostics={
+                        "backend": selected_backend,
+                        "model_name": getattr(response_message, "model_name", None) or active_model_name,
+                        "history_messages": len(message_history),
+                        "streaming": True,
+                        "first_chunk_ms": first_chunk_ms,
+                        "total_elapsed_ms": total_elapsed_ms,
+                    },
+                    usage=result.usage().opentelemetry_attributes(),
+                )
+                yield _ndjson({"type": "final", "response": final_response.model_dump(mode="json")})
+        except Exception as exc:  # noqa: BLE001
+            yield _ndjson({"type": "error", "message": str(exc)})
+
+    return event_stream()
+
+
+def _ndjson(payload: dict[str, object]) -> str:
+    return json.dumps(payload, ensure_ascii=False) + "\n"
 
 
 async def generate_quiz(*, model, store: SqliteStore, request: QuizGenerateRequest) -> QuizGenerateResponse:

@@ -80,10 +80,11 @@ async def test_handle_chat_allows_google_model_when_default_backend_is_llama(
     captured: dict[str, object] = {}
 
     class _FakeGoogleAgent:
-        async def run(self, message: str, *, deps, message_history):
+        async def run(self, message: str, *, deps, message_history, model_settings=None):
             captured["message"] = message
             captured["user_id"] = deps.user_id
             captured["message_history"] = list(message_history)
+            captured["model_settings"] = model_settings
 
             class _Usage:
                 def opentelemetry_attributes(self) -> dict[str, int]:
@@ -106,6 +107,7 @@ async def test_handle_chat_allows_google_model_when_default_backend_is_llama(
         lambda: Settings(
             llm_backend="llama_cpp",
             llama_model="gemma-4-E2B-it-Q4_K_M.gguf",
+            gemini_api_key="demo-key",
             app_db_path=tmp_path / "chat.db",
             app_storage_dir=tmp_path / "storage",
         ),
@@ -124,6 +126,7 @@ async def test_handle_chat_allows_google_model_when_default_backend_is_llama(
 
     assert response.run_id == "run-google"
     assert captured["message"] == "hello"
+    assert captured["model_settings"] is None
 
 
 @pytest.mark.asyncio
@@ -173,6 +176,52 @@ def test_chat_route_returns_400_for_invalid_model_selection(monkeypatch):
 
     assert response.status_code == 400
     assert "Requested model mismatch" in response.json()["detail"]
+
+
+def test_chat_stream_route_returns_400_for_invalid_model_selection(monkeypatch):
+    async def fake_build_chat_stream(*, model, store, request):
+        raise ValueError("Requested model mismatch for active backend.")
+
+    monkeypatch.setattr(app_module, "build_chat_stream", fake_build_chat_stream)
+
+    client = TestClient(app_module.app)
+    response = client.post(
+        "/v1/chat/stream",
+        json={
+            "user_id": "demo-user",
+            "message": "hello",
+            "model_name": "gemini-2.5-flash",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Requested model mismatch" in response.json()["detail"]
+
+
+def test_chat_stream_route_streams_ndjson(monkeypatch):
+    async def fake_build_chat_stream(*, model, store, request):
+        async def _stream():
+            yield '{"type":"metadata","session_id":"sess-1","backend":"llama_cpp","model_name":"gemma"}\n'
+            yield '{"type":"message_delta","delta":"hello"}\n'
+            yield '{"type":"final","response":{"session_id":"sess-1","run_id":"run-1","output":{"message":"hello","detected_intent":"chat","memory_to_store":[],"suggested_next_actions":[]},"reasoning":"plan","diagnostics":{"streaming":true},"usage":{}}}\n'
+
+        return _stream()
+
+    monkeypatch.setattr(app_module, "build_chat_stream", fake_build_chat_stream)
+
+    client = TestClient(app_module.app)
+    response = client.post(
+        "/v1/chat/stream",
+        json={
+            "user_id": "demo-user",
+            "message": "hello",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    assert '"type":"metadata"' in response.text
+    assert '"type":"final"' in response.text
 
 
 def test_image_route_returns_400_for_disabled_llama_vision(monkeypatch):

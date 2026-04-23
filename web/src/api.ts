@@ -220,6 +220,85 @@ export async function sendChatMessage(
   return response.json();
 }
 
+type ChatStreamEvent =
+  | { type: "metadata"; session_id: string; backend: string; model_name: string }
+  | { type: "metrics"; first_chunk_ms: number }
+  | { type: "reasoning_delta"; delta: string }
+  | { type: "message_delta"; delta: string }
+  | { type: "final"; response: ChatResponse }
+  | { type: "error"; message: string };
+
+export async function streamChatMessage(
+  userId: string,
+  message: string,
+  options: {
+    sessionId?: string | null;
+    modelName?: string | null;
+    onMetadata?: (event: Extract<ChatStreamEvent, { type: "metadata" }>) => void;
+    onMetrics?: (event: Extract<ChatStreamEvent, { type: "metrics" }>) => void;
+    onReasoningDelta?: (delta: string) => void;
+    onMessageDelta?: (delta: string) => void;
+  } = {},
+): Promise<ChatResponse> {
+  const response = await fetch(`${API_BASE}/v1/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: userId,
+      session_id: options.sessionId ?? undefined,
+      message,
+      model_name: options.modelName ?? undefined,
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to stream chat message: ${response.status} ${detail}`);
+  }
+  if (!response.body) {
+    throw new Error("Streaming response body was not available.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResponse: ChatResponse | null = null;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (line) {
+        const event = JSON.parse(line) as ChatStreamEvent;
+        if (event.type === "metadata") {
+          options.onMetadata?.(event);
+        } else if (event.type === "metrics") {
+          options.onMetrics?.(event);
+        } else if (event.type === "reasoning_delta") {
+          options.onReasoningDelta?.(event.delta);
+        } else if (event.type === "message_delta") {
+          options.onMessageDelta?.(event.delta);
+        } else if (event.type === "error") {
+          throw new Error(event.message);
+        } else if (event.type === "final") {
+          finalResponse = event.response;
+        }
+      }
+      newlineIndex = buffer.indexOf("\n");
+    }
+
+    if (done) break;
+  }
+
+  if (!finalResponse) {
+    throw new Error("Streaming chat finished without a final response payload.");
+  }
+  return finalResponse;
+}
+
 export async function analyzeChatImage(
   userId: string,
   file: File,

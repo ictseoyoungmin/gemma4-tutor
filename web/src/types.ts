@@ -191,6 +191,8 @@ export type ChatResponse = {
   session_id: string;
   run_id: string;
   output: TutorResponse;
+  reasoning?: string | null;
+  diagnostics: Record<string, unknown>;
   usage: Record<string, unknown>;
 };
 

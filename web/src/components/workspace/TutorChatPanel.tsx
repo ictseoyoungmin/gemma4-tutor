@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { analyzeChatImage, fetchHealth, sendChatMessage } from "../../api";
-import type { HealthResponse } from "../../types";
+import { analyzeChatImage, fetchHealth, streamChatMessage } from "../../api";
+import type { ChatResponse, HealthResponse } from "../../types";
 import { starterPrompts } from "./workspaceData";
 
 type ChatTurn = {
   id: string;
   role: "user" | "assistant";
   message: string;
+  reasoning?: string;
+  diagnostics?: string;
   meta?: string;
   suggestions?: string[];
+  isStreaming?: boolean;
 };
 
 type ChatAttachment = {
@@ -194,6 +197,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     if ((!trimmed && attachments.length === 0) || isSending) return;
     const currentAttachments = attachments;
     const currentAttachment = currentAttachments[0] ?? null;
+    const pendingAssistantId = `assistant-${Date.now()}`;
     shouldStickToBottomRef.current = true;
 
     setTurns((current) => [
@@ -205,6 +209,18 @@ export function TutorChatPanel({ userId }: { userId: string }) {
           ? `${trimmed || "이미지 학습 요청"}\n[이미지 첨부] ${currentAttachment.file.name}`
           : trimmed,
       },
+      ...(currentAttachment
+        ? []
+        : [
+            {
+              id: pendingAssistantId,
+              role: "assistant" as const,
+              message: "",
+              reasoning: "",
+              meta: `intent: chat · ${selectedModel}`,
+              isStreaming: true,
+            },
+          ]),
     ]);
     setDraft("");
     setAttachments([]);
@@ -230,35 +246,104 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         ]);
         setStatus(`이미지 학습 응답 완료 · ${selectedModel}`);
       } else {
-        const response = await sendChatMessage(userId, trimmed, sessionId, selectedModel);
-        setSessionId(response.session_id);
-        setTurns((current) => [
-          ...current,
-          {
-            id: response.run_id,
-            role: "assistant",
-            message: response.output.message,
-            meta: `intent: ${response.output.detected_intent}`,
-            suggestions: response.output.suggested_next_actions,
+        const response = await streamChatMessage(userId, trimmed, {
+          sessionId,
+          modelName: selectedModel,
+          onMetadata: (event) => {
+            setSessionId(event.session_id);
+            setStatus(`스트림 연결됨 · ${event.model_name}`);
           },
-        ]);
-        setStatus(`응답 수신 완료 · ${selectedModel}`);
+          onMetrics: (event) => {
+            setStatus(`첫 토큰 수신 · ${event.first_chunk_ms.toFixed(0)}ms · ${selectedModel}`);
+          },
+          onReasoningDelta: (delta) => {
+            if (!delta) return;
+            setTurns((current) =>
+              current.map((turn) =>
+                turn.id === pendingAssistantId
+                  ? { ...turn, reasoning: `${turn.reasoning ?? ""}${delta}` }
+                  : turn,
+              ),
+            );
+          },
+          onMessageDelta: (delta) => {
+            if (!delta) return;
+            setTurns((current) =>
+              current.map((turn) =>
+                turn.id === pendingAssistantId
+                  ? { ...turn, message: `${turn.message}${delta}` }
+                  : turn,
+              ),
+            );
+          },
+        });
+
+        setSessionId(response.session_id);
+        setTurns((current) =>
+          current.map((turn) =>
+            turn.id === pendingAssistantId ? buildCompletedAssistantTurn(turn, response) : turn,
+          ),
+        );
+
+        const totalElapsedMs = Number(response.diagnostics.total_elapsed_ms ?? 0);
+        setStatus(
+          totalElapsedMs > 0
+            ? `응답 수신 완료 · ${selectedModel} · ${Math.round(totalElapsedMs)}ms`
+            : `응답 수신 완료 · ${selectedModel}`,
+        );
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      setTurns((current) => [
-        ...current,
-        {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          message: `요청 처리 중 문제가 생겼어요. ${errorMessage}`,
-          meta: "request.error",
-        },
-      ]);
+      if (currentAttachment) {
+        setTurns((current) => [
+          ...current,
+          {
+            id: `error-${Date.now()}`,
+            role: "assistant",
+            message: `요청 처리 중 문제가 생겼어요. ${errorMessage}`,
+            meta: "request.error",
+          },
+        ]);
+      } else {
+        setTurns((current) =>
+          current.map((turn) =>
+            turn.id === pendingAssistantId
+              ? {
+                  ...turn,
+                  message: `요청 처리 중 문제가 생겼어요. ${errorMessage}`,
+                  meta: "request.error",
+                  isStreaming: false,
+                }
+              : turn,
+          ),
+        );
+      }
       setStatus("연결 문제");
     } finally {
       setIsSending(false);
     }
+  }
+
+  function buildCompletedAssistantTurn(turn: ChatTurn, response: ChatResponse): ChatTurn {
+    const firstChunkMs = Number(response.diagnostics.first_chunk_ms ?? 0);
+    const totalElapsedMs = Number(response.diagnostics.total_elapsed_ms ?? 0);
+    const diagnostics = [
+      firstChunkMs > 0 ? `first ${Math.round(firstChunkMs)}ms` : "",
+      totalElapsedMs > 0 ? `total ${Math.round(totalElapsedMs)}ms` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    return {
+      ...turn,
+      id: response.run_id,
+      message: response.output.message,
+      reasoning: response.reasoning ?? turn.reasoning ?? "",
+      diagnostics,
+      meta: `intent: ${response.output.detected_intent}`,
+      suggestions: response.output.suggested_next_actions,
+      isStreaming: false,
+    };
   }
 
   function handlePickImage() {
@@ -342,10 +427,26 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                 ))}
               </div>
 
+              {turn.role === "assistant" && (turn.reasoning || turn.isStreaming) ? (
+                <div className="workspace-bubble__reasoning">
+                  <div className="workspace-bubble__reasoning-label">Reasoning</div>
+                  <div className="workspace-bubble__reasoning-text">
+                    {turn.reasoning?.trim() || "생각 정리 중..."}
+                  </div>
+                </div>
+              ) : null}
+
               {turn.meta ? (
                 <div className="workspace-bubble__meta">
                   <div className="workspace-bubble__meta-dot" />
                   {turn.meta}
+                </div>
+              ) : null}
+
+              {turn.diagnostics ? (
+                <div className="workspace-bubble__meta">
+                  <div className="workspace-bubble__meta-dot" />
+                  {turn.diagnostics}
                 </div>
               ) : null}
 

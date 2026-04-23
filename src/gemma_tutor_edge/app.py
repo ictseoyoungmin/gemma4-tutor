@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from .config import get_settings
 from .harness.runner import execute_harness
@@ -24,6 +25,7 @@ from .schemas import (
 )
 from .services import (
     analyze_image,
+    build_chat_stream,
     generate_quiz,
     get_problem_inventory,
     get_practice_item_detail,
@@ -83,6 +85,17 @@ async def health() -> HealthResponse:
 async def chat(request: ChatRequest):
     try:
         return await handle_chat(model=model, store=store, request=request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/v1/chat/stream")
+async def chat_stream(request: ChatRequest):
+    try:
+        stream = await build_chat_stream(model=model, store=store, request=request)
+        return StreamingResponse(stream, media_type="application/x-ndjson")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001

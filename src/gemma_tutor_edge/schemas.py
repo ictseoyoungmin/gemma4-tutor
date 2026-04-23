@@ -39,6 +39,8 @@ class ChatResponse(BaseModel):
     session_id: str
     run_id: str
     output: TutorResponse
+    reasoning: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
     usage: dict[str, Any] = Field(default_factory=dict)
 
 
