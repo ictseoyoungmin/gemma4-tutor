@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     llama_api_key: str = "local-not-required"
     llama_model: str = "gemma-4-e2b-it"
     llama_vision_enabled: bool = True
+    model_dir: Path = Field(default_factory=lambda: Path.home() / "models")
+    llama_gguf_path: Path | None = None
+    llama_mmproj_path: Path | None = None
+    validate_llama_assets: bool = False
 
     enable_logfire: bool = False
     logfire_token: str | None = None
@@ -41,10 +45,41 @@ class Settings(BaseSettings):
     def resolved_google_api_key(self) -> str | None:
         return self.gemini_api_key or self.google_api_key
 
+    @property
+    def resolved_model_dir(self) -> Path:
+        return self.model_dir.expanduser()
+
+    @property
+    def resolved_llama_gguf_path(self) -> Path:
+        if self.llama_gguf_path is not None:
+            return self.llama_gguf_path.expanduser()
+        return self.resolved_model_dir / "gemma-4-E2B-it-Q4_K_M.gguf"
+
+    @property
+    def resolved_llama_mmproj_path(self) -> Path:
+        if self.llama_mmproj_path is not None:
+            return self.llama_mmproj_path.expanduser()
+        return self.resolved_model_dir / "mmproj-F16.gguf"
+
     @model_validator(mode="after")
     def ensure_dirs(self) -> "Settings":
         self.app_db_path.parent.mkdir(parents=True, exist_ok=True)
         self.app_storage_dir.mkdir(parents=True, exist_ok=True)
+        if self.llm_backend == "llama_cpp" and self.validate_llama_assets:
+            missing = []
+            if not self.resolved_llama_gguf_path.is_file():
+                missing.append(f"GGUF model file not found: {self.resolved_llama_gguf_path}")
+            if not self.resolved_llama_mmproj_path.is_file():
+                missing.append(
+                    f"Multimodal projector file not found: {self.resolved_llama_mmproj_path}"
+                )
+            if missing:
+                joined = " | ".join(missing)
+                raise ValueError(
+                    "Local llama.cpp asset validation failed. "
+                    f"{joined}. Update MODEL_DIR / LLAMA_GGUF_PATH / LLAMA_MMPROJ_PATH "
+                    "or disable VALIDATE_LLAMA_ASSETS for externally managed runtimes."
+                )
         return self
 
 
