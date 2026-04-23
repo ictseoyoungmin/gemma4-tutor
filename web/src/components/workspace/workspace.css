@@ -437,6 +437,43 @@
   gap: 5px;
 }
 
+.workspace-chat__runtime-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workspace-chat__runtime-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--b1);
+}
+
+.workspace-chat__runtime-badge.is-google {
+  background: rgba(66, 153, 225, 0.12);
+  color: #9fd2ff;
+  border-color: rgba(66, 153, 225, 0.28);
+}
+
+.workspace-chat__runtime-badge.is-llama_cpp {
+  background: rgba(141, 196, 85, 0.12);
+  color: #c6ef9b;
+  border-color: rgba(141, 196, 85, 0.28);
+}
+
+.workspace-chat__runtime-note {
+  font-size: 10px;
+  color: var(--t3);
+}
+
 .workspace-chat__model-row {
   margin: 0 0 12px;
   display: flex;
@@ -734,6 +771,13 @@
 .workspace-chat__ghost:hover {
   background: var(--bg3);
   color: var(--t0);
+}
+
+.workspace-chat__ghost:disabled {
+  opacity: 0.45;
+  cursor: default;
+  background: transparent;
+  color: var(--t3);
 }
 
 .workspace-chat__send,
@@ -2926,6 +2970,14 @@
 
   .workspace-chat__chips {
     gap: 6px;
+  }
+
+  .workspace-chat__runtime-row {
+    align-items: flex-start;
+  }
+
+  .workspace-chat__runtime-note {
+    font-size: 9px;
   }
 
   .workspace-chat__chip {

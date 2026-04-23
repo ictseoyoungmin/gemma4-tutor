@@ -2,6 +2,7 @@ import type {
   ChatResponse,
   DashboardDetail,
   DeleteResourceResponse,
+  HealthResponse,
   HarnessRunResponse,
   ImageAnalysisResponse,
   ProblemGenerationResponse,
@@ -17,6 +18,14 @@ import type {
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  const response = await fetch(`${API_BASE}/v1/health`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch health: ${response.status}`);
+  }
+  return response.json();
+}
 
 export async function fetchDashboardDetail(userId: string): Promise<DashboardDetail> {
   const response = await fetch(`${API_BASE}/v1/dashboard/${userId}/detail`);

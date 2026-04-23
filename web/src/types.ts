@@ -194,6 +194,12 @@ export type ChatResponse = {
   usage: Record<string, unknown>;
 };
 
+export type HealthResponse = {
+  status: string;
+  backend: "google" | "llama_cpp" | "test" | string;
+  model_name: string;
+};
+
 export type ImageAnalysisResponse = {
   scene_summary: string;
   vocabulary: string[];

@@ -338,6 +338,10 @@ Priority:
 
 - `P1`
 
+Status:
+
+- `completed` on 2026-04-23
+
 Objective:
 
 - Surface the local Gemma 4 path in the UI without confusing users about what is actually runnable.
@@ -368,6 +372,36 @@ Deliverables:
 - model-picker cleanup
 - backend/runtime status affordance
 - any small UX adjustments needed for image-based local testing
+
+Completed work:
+
+- Added a frontend health fetch so the tutor chat UI can read the active backend/runtime directly from `/v1/health`.
+- Added a typed frontend `HealthResponse` contract and API helper for runtime discovery.
+- Updated the tutor chat panel to surface runtime state inside the top section:
+  - `Hosted Gemini` when the backend is `google`
+  - `Local Gemma 4` when the backend is `llama_cpp`
+- Added a runtime badge that shows the active backend and active model name.
+- Made the model picker backend-aware:
+  - hosted mode shows hosted Gemini model options
+  - local mode collapses to the served local Gemma 4 model
+- Disabled the model picker button when only one runtime-valid model is available, reducing misleading local-mode interaction.
+- Updated helper/status copy so the user can tell whether they are chatting with:
+  - hosted Gemini
+  - local Gemma 4
+- Added lightweight runtime-specific notes without introducing a new settings screen.
+- Added small CSS support for:
+  - runtime badge styling
+  - local vs hosted visual differentiation
+  - disabled model-picker affordance
+
+Validation notes:
+
+- Verified the backend still reported:
+  - `GET http://127.0.0.1:8009/v1/health` -> `backend=llama_cpp`, `model_name=gemma-4-E2B-it-Q4_K_M.gguf`
+- Verified the frontend compiled successfully after the UI/runtime changes:
+  - `cd web && npm run build`
+- Result:
+  - build passed
 
 ### Slice 6. Compose Healthchecks And Developer Workflow Hardening
 

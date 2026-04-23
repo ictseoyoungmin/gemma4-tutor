@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { analyzeChatImage, sendChatMessage } from "../../api";
+import { analyzeChatImage, fetchHealth, sendChatMessage } from "../../api";
+import type { HealthResponse } from "../../types";
 import { starterPrompts } from "./workspaceData";
 
 type ChatTurn = {
@@ -46,16 +47,20 @@ const initialTurns: ChatTurn[] = [
   },
 ];
 
-
 const chatModelOptions = [
-  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)" },
-  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Lite (Preview)" },
-  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-  { value: "gemma-4-26b-a4b-it", label: "Gemma 4 26B (MoE)" },
-  // { value: "gemma-4-e4b-it", label: "Gemma 4 E4B (Mobile Optimized)" },
+  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)", backend: "google" },
+  { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Lite (Preview)", backend: "google" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", backend: "google" },
+  { value: "gemma-4-E2B-it-Q4_K_M.gguf", label: "Gemma 4 E2B Local", backend: "llama_cpp" },
 ] as const;
 
 const AUTO_SCROLL_THRESHOLD_PX = 48;
+type ChatModelValue = (typeof chatModelOptions)[number]["value"];
+type ChatModelOption = {
+  value: ChatModelValue;
+  label: string;
+  backend: "google" | "llama_cpp";
+};
 
 
 export function TutorChatPanel({ userId }: { userId: string }) {
@@ -63,28 +68,100 @@ export function TutorChatPanel({ userId }: { userId: string }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>(initialTurns);
   const [status, setStatus] = useState("연결됨");
+  const [runtime, setRuntime] = useState<HealthResponse | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [selectedModel, setSelectedModel] = useState<(typeof chatModelOptions)[number]["value"]>(
+  const [selectedModel, setSelectedModel] = useState<ChatModelValue>(
     "gemini-3-flash-preview",
   );
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const primaryAttachment = attachments[0] ?? null;
+  const runtimeBackend = runtime?.backend ?? "google";
+  const runtimeModeLabel = runtimeBackend === "llama_cpp" ? "Local Gemma 4" : "Hosted Gemini";
+  const availableModelOptions = useMemo<ChatModelOption[]>(() => {
+    if (runtimeBackend === "llama_cpp") {
+      const localOption = chatModelOptions.find((option) => option.value === runtime?.model_name);
+      if (localOption) {
+        return [localOption];
+      }
+      return [
+        {
+          value: "gemma-4-E2B-it-Q4_K_M.gguf",
+          label: runtime?.model_name ? `Local Model · ${runtime.model_name}` : "Local Gemma 4",
+          backend: "llama_cpp",
+        },
+      ];
+    }
+    return chatModelOptions.filter((option) => option.backend === "google");
+  }, [runtime?.model_name, runtimeBackend]);
 
   const helperText = useMemo(() => {
     if (isSending) return "튜터가 다음 학습 흐름을 준비하고 있어요.";
-    if (sessionId) return `현재 세션이 이어지고 있어요. model: ${selectedModel}`;
+    if (sessionId) return `현재 세션이 이어지고 있어요. runtime: ${runtimeModeLabel} · model: ${selectedModel}`;
     if (primaryAttachment) return `이미지 첨부됨 · ${primaryAttachment.file.name}`;
-    return "메시지를 입력하거나 예문에 답해보세요…";
-  }, [isSending, primaryAttachment, selectedModel, sessionId]);
+    return runtimeBackend === "llama_cpp"
+      ? "현재 로컬 Gemma 4 런타임으로 연결되어 있어요."
+      : "현재 Hosted Gemini 런타임으로 연결되어 있어요.";
+  }, [isSending, primaryAttachment, runtimeBackend, runtimeModeLabel, selectedModel, sessionId]);
 
   const selectedModelLabel = useMemo(
-    () => chatModelOptions.find((option) => option.value === selectedModel)?.label ?? selectedModel,
-    [selectedModel],
+    () => availableModelOptions.find((option) => option.value === selectedModel)?.label ?? selectedModel,
+    [availableModelOptions, selectedModel],
   );
+
+  const runtimeBadgeLabel = useMemo(() => {
+    if (!runtime) return "Runtime 확인 중";
+    if (runtime.backend === "llama_cpp") return `Local · ${runtime.model_name}`;
+    if (runtime.backend === "google") return `Hosted · ${runtime.model_name}`;
+    return `${runtime.backend} · ${runtime.model_name}`;
+  }, [runtime]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRuntime() {
+      try {
+        const nextRuntime = await fetchHealth();
+        if (cancelled) return;
+        setRuntime(nextRuntime);
+        setSelectedModel((current) => {
+          const matchingOption = availableModelOptions.find((option) => option.value === current);
+          if (nextRuntime.backend === "llama_cpp") {
+            return "gemma-4-E2B-it-Q4_K_M.gguf";
+          }
+          if (matchingOption?.backend === "google") {
+            return current;
+          }
+          return "gemini-3-flash-preview";
+        });
+        setStatus(`연결됨 · ${nextRuntime.backend === "llama_cpp" ? "Local Gemma 4" : "Hosted Gemini"}`);
+      } catch (error) {
+        if (cancelled) return;
+        setStatus(error instanceof Error ? error.message : "Runtime 상태를 확인하지 못했습니다.");
+      }
+    }
+
+    void loadRuntime();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!runtime) return;
+    if (runtime.backend === "llama_cpp") {
+      setSelectedModel("gemma-4-E2B-it-Q4_K_M.gguf");
+      return;
+    }
+
+    setSelectedModel((current) => {
+      const stillAvailable = availableModelOptions.some((option) => option.value === current);
+      return stillAvailable ? current : "gemini-3-flash-preview";
+    });
+  }, [availableModelOptions, runtime]);
 
   useEffect(() => {
     const transcript = transcriptRef.current;
@@ -242,6 +319,16 @@ export function TutorChatPanel({ userId }: { userId: string }) {
             </button>
           ))}
         </div>
+        <div className="workspace-chat__runtime-row">
+          <div className={`workspace-chat__runtime-badge is-${runtimeBackend}`}>
+            {runtimeBadgeLabel}
+          </div>
+          <div className="workspace-chat__runtime-note">
+            {runtimeBackend === "llama_cpp"
+              ? "UI is locked to the served local model."
+              : "Choose a hosted Gemini model for this session."}
+          </div>
+        </div>
       </div>
 
       <div
@@ -394,6 +481,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                   className={`workspace-chat__ghost${modelPickerOpen ? " is-active" : ""}`}
                   aria-label={`모델 선택 · ${selectedModelLabel}`}
                   title={selectedModelLabel}
+                  disabled={availableModelOptions.length <= 1}
                   onClick={() => setModelPickerOpen((current) => !current)}
                 >
                   <svg className="icon-sm" viewBox="0 0 24 24">
@@ -402,7 +490,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                 </button>
                 {modelPickerOpen ? (
                   <div className="workspace-chat__model-popover">
-                    {chatModelOptions.map((option) => (
+                    {availableModelOptions.map((option) => (
                       <button
                         key={option.value}
                         type="button"
