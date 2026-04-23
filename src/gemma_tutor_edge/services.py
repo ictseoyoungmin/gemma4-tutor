@@ -4,7 +4,13 @@ import json
 from time import perf_counter
 from uuid import uuid4
 
-from .agents import build_quiz_agent, build_tutor_agent, build_vision_agent, run_image_analysis
+from .agents import (
+    build_local_tutor_agent,
+    build_quiz_agent,
+    build_tutor_agent,
+    build_vision_agent,
+    run_image_analysis,
+)
 from .config import get_settings
 from .deps import ContentDeps, TutorDeps
 from .jobs import build_seed_ready_pack, enqueue_prebuild_job
@@ -65,24 +71,25 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
             },
             usage={},
         )
-    agent = build_tutor_agent(selected_model)
+    agent = build_local_tutor_agent(selected_model) if selected_backend == "llama_cpp" else build_tutor_agent(selected_model)
     deps = TutorDeps(user_id=request.user_id, store=store)
     message_history = await store.load_chat_history(request.user_id, session_id)
     result = await agent.run(
         request.message,
         deps=deps,
         message_history=message_history,
-        model_settings=_build_chat_model_settings(selected_backend),
+        model_settings=_build_chat_model_settings(settings, selected_backend),
     )
     await store.save_chat_history(request.user_id, session_id, result.all_messages_json())
-    for item in result.output.memory_to_store:
+    output = _normalize_tutor_output(result.output)
+    for item in output.memory_to_store:
         await store.add_memory(request.user_id, item)
     elapsed_ms = round((perf_counter() - started_at) * 1000, 1)
     response_message = getattr(result, "response", None)
     return ChatResponse(
         session_id=session_id,
         run_id=result.run_id,
-        output=result.output,
+        output=output,
         reasoning=getattr(response_message, "thinking", None),
         diagnostics={
             "backend": selected_backend,
@@ -95,15 +102,22 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
     )
 
 
-def _build_chat_model_settings(selected_backend: str) -> dict[str, object] | None:
+def _build_chat_model_settings(settings, selected_backend: str) -> dict[str, object] | None:
     if selected_backend != "llama_cpp":
         return None
-    return {
-        "thinking": True,
-        "extra_body": {
-            "reasoning_format": "auto",
-        },
+    model_settings: dict[str, object] = {
+        "max_tokens": settings.llama_chat_max_tokens,
     }
+    if settings.llama_chat_temperature is not None:
+        model_settings["temperature"] = settings.llama_chat_temperature
+    if settings.llama_chat_thinking_enabled:
+        model_settings["thinking"] = True
+        model_settings["extra_body"] = {
+            "reasoning_format": "auto",
+        }
+    else:
+        model_settings["thinking"] = False
+    return model_settings
 
 
 async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
@@ -153,10 +167,10 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
 
         return test_stream()
 
-    agent = build_tutor_agent(selected_model)
+    agent = build_local_tutor_agent(selected_model) if selected_backend == "llama_cpp" else build_tutor_agent(selected_model)
     deps = TutorDeps(user_id=request.user_id, store=store)
     message_history = await store.load_chat_history(request.user_id, session_id)
-    model_settings = _build_chat_model_settings(selected_backend)
+    model_settings = _build_chat_model_settings(settings, selected_backend)
 
     async def event_stream():
         started_at = perf_counter()
@@ -180,9 +194,13 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
                 message_history=message_history,
                 model_settings=model_settings,
             ) as result:
-                async for response, _is_last in result.stream_responses(debounce_by=None):
-                    current_message = response.text or ""
-                    current_reasoning = response.thinking or ""
+                async for partial_output in result.stream_output(debounce_by=None):
+                    if isinstance(partial_output, str):
+                        current_message = partial_output
+                    else:
+                        current_message = partial_output.message or ""
+                    response_message = result.response
+                    current_reasoning = getattr(response_message, "thinking", None) or ""
 
                     if first_chunk_ms is None and (current_message or current_reasoning):
                         first_chunk_ms = round((perf_counter() - started_at) * 1000, 1)
@@ -208,7 +226,7 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
                             yield _ndjson({"type": "message_delta", "delta": message_delta})
                         previous_message = current_message
 
-                output = await result.get_output()
+                output = _normalize_tutor_output(await result.get_output())
                 await store.save_chat_history(request.user_id, session_id, result.all_messages_json())
                 for item in output.memory_to_store:
                     await store.add_memory(request.user_id, item)
@@ -239,6 +257,17 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
 
 def _ndjson(payload: dict[str, object]) -> str:
     return json.dumps(payload, ensure_ascii=False) + "\n"
+
+
+def _normalize_tutor_output(output: TutorResponse | str) -> TutorResponse:
+    if isinstance(output, TutorResponse):
+        return output
+    return TutorResponse(
+        message=output.strip(),
+        detected_intent="chat",
+        memory_to_store=[],
+        suggested_next_actions=[],
+    )
 
 
 async def generate_quiz(*, model, store: SqliteStore, request: QuizGenerateRequest) -> QuizGenerateResponse:

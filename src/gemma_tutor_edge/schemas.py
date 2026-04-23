@@ -27,7 +27,7 @@ class ChatRequest(BaseModel):
 
 
 class TutorResponse(BaseModel):
-    message: str
+    message: str = ""
     detected_intent: Literal[
         "chat", "quiz_request", "analysis", "memory_update", "image_learning"
     ] = "chat"

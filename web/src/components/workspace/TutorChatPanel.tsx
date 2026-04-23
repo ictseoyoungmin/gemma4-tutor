@@ -59,13 +59,16 @@ const chatModelOptions = [
 ] as const;
 
 const AUTO_SCROLL_THRESHOLD_PX = 48;
-type ChatModelValue = (typeof chatModelOptions)[number]["value"];
 type ChatModelOption = {
-  value: ChatModelValue;
+  value: string;
   label: string;
   backend: "google" | "llama_cpp";
 };
 
+function resolveRuntimeDefaultModel(runtime: HealthResponse | null): string {
+  if (!runtime) return "gemini-3-flash-preview";
+  return runtime.model_name;
+}
 
 export function TutorChatPanel({ userId }: { userId: string }) {
   const [draft, setDraft] = useState(starterDrafts["TOEIC Part 5"]);
@@ -76,9 +79,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
   const [isSending, setIsSending] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [selectedModel, setSelectedModel] = useState<ChatModelValue>(
-    "gemini-3-flash-preview",
-  );
+  const [selectedModel, setSelectedModel] = useState<string>("gemini-3-flash-preview");
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -88,31 +89,39 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     const options: ChatModelOption[] = [...chatModelOptions];
     if (
       runtime?.model_name &&
-      runtime.backend === "llama_cpp" &&
       !options.some((option) => option.value === runtime.model_name)
     ) {
       options.push({
-        value: "gemma-4-E2B-it-Q4_K_M.gguf",
-        label: `Local Model · ${runtime.model_name}`,
-        backend: "llama_cpp",
+        value: runtime.model_name,
+        label:
+          runtime.backend === "llama_cpp"
+            ? `Local Model · ${runtime.model_name}`
+            : `Hosted Model · ${runtime.model_name}`,
+        backend: runtime.backend === "llama_cpp" ? "llama_cpp" : "google",
       });
     }
     return options;
   }, [runtime?.backend, runtime?.model_name]);
 
-  const selectedModelLabel = useMemo(
-    () => availableModelOptions.find((option) => option.value === selectedModel)?.label ?? selectedModel,
+  const selectedModelOption = useMemo(
+    () => availableModelOptions.find((option) => option.value === selectedModel) ?? null,
     [availableModelOptions, selectedModel],
+  );
+
+  const selectedModelBackend = selectedModelOption?.backend ?? runtimeBackend;
+  const selectedModelLabel = useMemo(
+    () => selectedModelOption?.label ?? selectedModel,
+    [selectedModelOption, selectedModel],
   );
 
   const helperText = useMemo(() => {
     if (isSending) return "튜터가 다음 학습 흐름을 준비하고 있어요.";
-    if (sessionId) return `현재 세션이 이어지고 있어요. default backend: ${runtimeBackend} · model: ${selectedModelLabel}`;
+    if (sessionId) return `현재 세션이 이어지고 있어요. backend: ${selectedModelBackend} · model: ${selectedModelLabel}`;
     if (primaryAttachment) return `이미지 첨부됨 · ${primaryAttachment.file.name}`;
     return runtimeBackend === "llama_cpp"
-      ? "로컬 llama.cpp 기본 런타임이 연결되어 있어요. picker에서 hosted 모델도 선택할 수 있어요."
+      ? "로컬 llama.cpp 기본 런타임이 연결되어 있고, 기본 선택도 local 모델로 맞춰집니다."
       : "Hosted Google 기본 런타임이 연결되어 있어요. picker에서 local llama.cpp 모델도 선택할 수 있어요.";
-  }, [isSending, primaryAttachment, runtimeBackend, selectedModelLabel, sessionId]);
+  }, [isSending, primaryAttachment, runtimeBackend, selectedModelBackend, selectedModelLabel, sessionId]);
 
   const runtimeBadgeLabel = useMemo(() => {
     if (!runtime) return "Runtime 확인 중";
@@ -128,11 +137,13 @@ export function TutorChatPanel({ userId }: { userId: string }) {
       try {
         const nextRuntime = await fetchHealth();
         if (cancelled) return;
+        const runtimeDefaultModel = resolveRuntimeDefaultModel(nextRuntime);
         setRuntime(nextRuntime);
-        setSelectedModel((current) => current);
-        const initialModelLabel = availableModelOptions.find((option) => option.value === selectedModel)?.label
-          ?? (nextRuntime.backend === "llama_cpp" ? nextRuntime.model_name : "Gemini 3 Flash (Preview)");
-        setStatus(`연결됨 · ${initialModelLabel}`);
+        setSelectedModel(runtimeDefaultModel);
+        const runtimeDefaultLabel =
+          availableModelOptions.find((option) => option.value === runtimeDefaultModel)?.label
+          ?? runtimeDefaultModel;
+        setStatus(`연결됨 · ${runtimeDefaultLabel}`);
       } catch (error) {
         if (cancelled) return;
         setStatus(error instanceof Error ? error.message : "Runtime 상태를 확인하지 못했습니다.");
@@ -149,7 +160,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     if (!runtime) return;
     setSelectedModel((current) => {
       const stillAvailable = availableModelOptions.some((option) => option.value === current);
-      return stillAvailable ? current : "gemini-3-flash-preview";
+      return stillAvailable ? current : resolveRuntimeDefaultModel(runtime);
     });
   }, [availableModelOptions, runtime]);
 
@@ -427,11 +438,11 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                 ))}
               </div>
 
-              {turn.role === "assistant" && (turn.reasoning || turn.isStreaming) ? (
+              {turn.role === "assistant" && turn.reasoning?.trim() ? (
                 <div className="workspace-bubble__reasoning">
                   <div className="workspace-bubble__reasoning-label">Reasoning</div>
                   <div className="workspace-bubble__reasoning-text">
-                    {turn.reasoning?.trim() || "생각 정리 중..."}
+                    {turn.reasoning.trim()}
                   </div>
                 </div>
               ) : null}

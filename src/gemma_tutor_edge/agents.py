@@ -74,6 +74,21 @@ def build_tutor_agent(model) -> Agent[TutorDeps, TutorResponse]:
     return agent
 
 
+def build_local_tutor_agent(model) -> Agent[TutorDeps, str]:
+    return Agent(
+        model,
+        deps_type=TutorDeps,
+        output_type=str,
+        system_prompt=(
+            "You are Gemma Tutor Edge, a practical English tutor. "
+            "Reply in Korean unless the learner asks for English. "
+            "Keep answers short, concrete, and directly useful for TOEIC or English study. "
+            "Do not use tools. Do not emit JSON."
+        ),
+        tool_timeout=20,
+    )
+
+
 def build_quiz_agent(model) -> Agent[ContentDeps, QuizPack]:
     return Agent(
         model,
