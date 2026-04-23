@@ -7,13 +7,17 @@ from fastapi.testclient import TestClient
 
 import gemma_tutor_edge.app as app_module
 from gemma_tutor_edge.config import Settings
-from gemma_tutor_edge.llm import resolve_active_model_name, validate_requested_model_name
-from gemma_tutor_edge.schemas import ChatRequest
+from gemma_tutor_edge.llm import (
+    resolve_active_model_name,
+    resolve_backend_for_model_name,
+    validate_requested_model_name,
+)
+from gemma_tutor_edge.schemas import ChatRequest, TutorResponse
 from gemma_tutor_edge.services import analyze_image, handle_chat
 from gemma_tutor_edge.storage import SqliteStore
 
 
-def test_validate_requested_model_name_rejects_gguf_on_google_backend(tmp_path: Path):
+def test_validate_requested_model_name_allows_local_gguf_from_google_default(tmp_path: Path):
     settings = Settings(
         llm_backend="google",
         gemini_api_key="demo-key",
@@ -21,8 +25,8 @@ def test_validate_requested_model_name_rejects_gguf_on_google_backend(tmp_path: 
         app_storage_dir=tmp_path / "storage",
     )
 
-    with pytest.raises(ValueError, match="active backend is 'google'"):
-        validate_requested_model_name(settings, "gemma-4-E2B-it-Q4_K_M.gguf")
+    assert validate_requested_model_name(settings, "gemma-4-E2B-it-Q4_K_M.gguf") == "gemma-4-E2B-it-Q4_K_M.gguf"
+    assert resolve_backend_for_model_name(settings, "gemma-4-E2B-it-Q4_K_M.gguf") == "llama_cpp"
 
 
 def test_validate_requested_model_name_rejects_wrong_llama_model(tmp_path: Path):
@@ -33,8 +37,19 @@ def test_validate_requested_model_name_rejects_wrong_llama_model(tmp_path: Path)
         app_storage_dir=tmp_path / "storage",
     )
 
-    with pytest.raises(ValueError, match="does not match the active llama.cpp served model"):
-        validate_requested_model_name(settings, "gemini-2.5-flash")
+    with pytest.raises(ValueError, match="does not match the configured llama.cpp served model"):
+        validate_requested_model_name(settings, "other-local-model.gguf")
+
+
+def test_resolve_backend_for_model_name_uses_google_for_non_gguf_model(tmp_path: Path):
+    settings = Settings(
+        llm_backend="llama_cpp",
+        llama_model="gemma-4-E2B-it-Q4_K_M.gguf",
+        app_db_path=tmp_path / "test.db",
+        app_storage_dir=tmp_path / "storage",
+    )
+
+    assert resolve_backend_for_model_name(settings, "gemini-2.5-flash") == "google"
 
 
 def test_resolve_active_model_name_uses_backend_specific_default(tmp_path: Path):
@@ -57,9 +72,35 @@ def test_resolve_active_model_name_uses_backend_specific_default(tmp_path: Path)
 
 
 @pytest.mark.asyncio
-async def test_handle_chat_rejects_mismatched_model_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+async def test_handle_chat_allows_google_model_when_default_backend_is_llama(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     store = SqliteStore(tmp_path / "chat.db")
     await store.init()
+    captured: dict[str, object] = {}
+
+    class _FakeGoogleAgent:
+        async def run(self, message: str, *, deps, message_history):
+            captured["message"] = message
+            captured["user_id"] = deps.user_id
+            captured["message_history"] = list(message_history)
+
+            class _Usage:
+                def opentelemetry_attributes(self) -> dict[str, int]:
+                    return {"input_tokens": 1, "output_tokens": 1}
+
+            class _Result:
+                run_id = "run-google"
+                output = TutorResponse(message="google path ok")
+
+                def usage(self):
+                    return _Usage()
+
+                def all_messages_json(self) -> bytes:
+                    return b"[]"
+
+            return _Result()
+
     monkeypatch.setattr(
         "gemma_tutor_edge.services.get_settings",
         lambda: Settings(
@@ -69,17 +110,20 @@ async def test_handle_chat_rejects_mismatched_model_name(tmp_path: Path, monkeyp
             app_storage_dir=tmp_path / "storage",
         ),
     )
+    monkeypatch.setattr("gemma_tutor_edge.services.build_tutor_agent", lambda _model: _FakeGoogleAgent())
 
-    with pytest.raises(ValueError, match="active llama.cpp served model"):
-        await handle_chat(
-            model="fake-model",
-            store=store,
-            request=ChatRequest(
-                user_id="u1",
-                message="hello",
-                model_name="gemini-2.5-flash",
-            ),
-        )
+    response = await handle_chat(
+        model="fake-model",
+        store=store,
+        request=ChatRequest(
+            user_id="u1",
+            message="hello",
+            model_name="gemini-2.5-flash",
+        ),
+    )
+
+    assert response.run_id == "run-google"
+    assert captured["message"] == "hello"
 
 
 @pytest.mark.asyncio

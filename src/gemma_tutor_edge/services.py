@@ -7,7 +7,7 @@ from .config import get_settings
 from .deps import ContentDeps, TutorDeps
 from .jobs import build_seed_ready_pack, enqueue_prebuild_job
 from .jobs import enqueue_problem_generation_job
-from .llm import build_model_for_name
+from .llm import build_model_for_name, resolve_backend_for_model_name
 from .schemas import (
     ChatRequest,
     ChatResponse,
@@ -196,9 +196,10 @@ async def analyze_image(
     model_name: str | None = None,
 ) -> ImageAnalysisResponse:
     settings = get_settings()
-    if settings.llm_backend == "llama_cpp" and not settings.llama_vision_enabled:
+    image_backend = resolve_backend_for_model_name(settings, model_name)
+    if image_backend == "llama_cpp" and not settings.llama_vision_enabled:
         raise ValueError(
-            "Image analysis is disabled for the active llama.cpp backend because LLAMA_VISION_ENABLED=false."
+            "Image analysis is disabled for llama.cpp because LLAMA_VISION_ENABLED=false."
         )
     selected_model = build_model_for_name(settings, model_name) if model_name else model
     agent = build_vision_agent(selected_model)
