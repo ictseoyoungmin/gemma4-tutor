@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .harness.runner import execute_harness
-from .llm import build_model
+from .llm import build_model, resolve_active_model_name
 from .schemas import (
     ChatRequest,
     HealthResponse,
@@ -72,14 +72,19 @@ app.add_middleware(
 
 @app.get("/v1/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    model_name = settings.google_model if settings.llm_backend == "google" else settings.llama_model
-    return HealthResponse(status="ok", backend=settings.llm_backend, model_name=model_name)
+    return HealthResponse(
+        status="ok",
+        backend=settings.llm_backend,
+        model_name=resolve_active_model_name(settings),
+    )
 
 
 @app.post("/v1/chat")
 async def chat(request: ChatRequest):
     try:
         return await handle_chat(model=model, store=store, request=request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -287,5 +292,7 @@ async def image_analyze(
             media_type=file.content_type or "image/png",
             model_name=model_name,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc

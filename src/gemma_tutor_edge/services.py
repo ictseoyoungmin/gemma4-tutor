@@ -36,7 +36,8 @@ from .toeic import TOEIC_ITEMS, get_item_by_id, select_next_item
 
 
 async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> ChatResponse:
-    selected_model = build_model_for_name(get_settings(), request.model_name) if request.model_name else model
+    settings = get_settings()
+    selected_model = build_model_for_name(settings, request.model_name) if request.model_name else model
     session_id = request.session_id or uuid4().hex
     if selected_model == "test":
         return ChatResponse(
@@ -194,7 +195,12 @@ async def analyze_image(
     media_type: str,
     model_name: str | None = None,
 ) -> ImageAnalysisResponse:
-    selected_model = build_model_for_name(get_settings(), model_name) if model_name else model
+    settings = get_settings()
+    if settings.llm_backend == "llama_cpp" and not settings.llama_vision_enabled:
+        raise ValueError(
+            "Image analysis is disabled for the active llama.cpp backend because LLAMA_VISION_ENABLED=false."
+        )
+    selected_model = build_model_for_name(settings, model_name) if model_name else model
     agent = build_vision_agent(selected_model)
     deps = ContentDeps(user_id=user_id, store=store)
     return await run_image_analysis(agent, prompt, image_bytes, media_type, deps)

@@ -267,6 +267,10 @@ Priority:
 
 - `P1`
 
+Status:
+
+- `completed` on 2026-04-23
+
 Objective:
 
 - Make local and hosted backends behave consistently for model selection and error reporting.
@@ -295,6 +299,38 @@ Deliverables:
 - backend config cleanup
 - clearer runtime validation behavior
 - regression tests for local-mode request plumbing where practical
+
+Completed work:
+
+- Added backend-specific active model resolution so `/v1/health` now reports the model through one shared helper instead of route-local branching.
+- Added explicit requested-model validation rules:
+  - reject `.gguf` local model names when the active backend is `google`
+  - reject non-served model names when the active backend is `llama_cpp`
+- Kept backend switching env-driven, while making invalid cross-backend model selection fail early and clearly.
+- Added explicit `llama_cpp` vision gating in the image-analysis service:
+  - when `LLAMA_VISION_ENABLED=false`, `/v1/image/analyze` now fails fast instead of attempting multimodal inference
+- Updated route-level error mapping so backend validation issues now return `400` for:
+  - `/v1/chat`
+  - `/v1/image/analyze`
+- Preserved the existing route contract and provider abstraction.
+
+Validation notes:
+
+- Added regression coverage for:
+  - rejecting GGUF model names on the Google backend
+  - rejecting mismatched local model names on the `llama_cpp` backend
+  - active-model resolution for health reporting
+  - chat-service rejection on invalid local model selection
+  - image-service rejection when `LLAMA_VISION_ENABLED=false`
+  - route-level `400` behavior for invalid chat/image requests
+- Verified with:
+  - `tests/test_llama_runtime_validation.py`
+  - `tests/test_image_analyze_api.py`
+  - `tests/test_config.py`
+- Result:
+  - `13 passed`
+- Confirmed the running Compose stack still reports:
+  - `GET http://127.0.0.1:8009/v1/health` -> `backend=llama_cpp`, `model_name=gemma-4-E2B-it-Q4_K_M.gguf`
 
 ### Slice 5. UI Exposure And Local Backend Affordances
 
