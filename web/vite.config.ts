@@ -5,13 +5,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [
-      "facility-thereby-facial-sat.trycloudflare.com",
+      "https://mineral-recommended-newest-vocational.trycloudflare.com",
       "valves-packaging-ent-numbers.trycloudflare.com",
     ],
     port: 5173,
     proxy: {
       "/v1": {
-        target: "http://127.0.0.1:8000",
+        target: "http://127.0.0.1:8009",
         changeOrigin: true,
       },
     },
