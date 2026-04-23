@@ -44,6 +44,41 @@ from .storage import SqliteStore
 from .toeic import TOEIC_ITEMS, get_item_by_id, select_next_item
 
 
+async def _resolve_chat_session(
+    *,
+    store: SqliteStore,
+    user_id: str,
+    requested_session_id: str | None,
+    backend: str,
+    model_name: str,
+) -> tuple[str, list, dict[str, object]]:
+    session_id = requested_session_id or uuid4().hex
+    diagnostics: dict[str, object] = {}
+    if not requested_session_id:
+        return session_id, [], diagnostics
+
+    session_meta = await store.get_chat_session_meta(user_id, requested_session_id)
+    if session_meta is None:
+        return session_id, [], diagnostics
+
+    backend_changed = session_meta.backend not in (None, backend)
+    model_changed = session_meta.model_name not in (None, model_name)
+    if backend_changed or model_changed:
+        new_session_id = uuid4().hex
+        diagnostics.update(
+            {
+                "session_reset": True,
+                "replaced_session_id": requested_session_id,
+                "session_reset_reason": (
+                    "backend_changed" if backend_changed else "model_changed"
+                ),
+            }
+        )
+        return new_session_id, [], diagnostics
+
+    return requested_session_id, await store.load_chat_history(user_id, requested_session_id), diagnostics
+
+
 async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> ChatResponse:
     settings = get_settings()
     selected_model = build_model_for_name(settings, request.model_name) if request.model_name else model
@@ -51,7 +86,13 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
     active_model_name = request.model_name or (
         settings.llama_model if selected_backend == "llama_cpp" else settings.google_model
     )
-    session_id = request.session_id or uuid4().hex
+    session_id, message_history, session_diagnostics = await _resolve_chat_session(
+        store=store,
+        user_id=request.user_id,
+        requested_session_id=request.session_id,
+        backend=selected_backend,
+        model_name=active_model_name,
+    )
     started_at = perf_counter()
     if selected_model == "test":
         return ChatResponse(
@@ -69,19 +110,25 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
                 "history_messages": 0,
                 "streaming": False,
                 "total_elapsed_ms": 0,
+                **session_diagnostics,
             },
             usage={},
         )
     agent = build_local_tutor_agent(selected_model) if selected_backend == "llama_cpp" else build_tutor_agent(selected_model)
     deps = TutorDeps(user_id=request.user_id, store=store)
-    message_history = await store.load_chat_history(request.user_id, session_id)
     result = await agent.run(
         request.message,
         deps=deps,
         message_history=message_history,
         model_settings=_build_chat_model_settings(settings, selected_backend),
     )
-    await store.save_chat_history(request.user_id, session_id, result.all_messages_json())
+    await store.save_chat_history(
+        request.user_id,
+        session_id,
+        result.all_messages_json(),
+        backend=selected_backend,
+        model_name=active_model_name,
+    )
     output = _normalize_tutor_output(result.output)
     for item in output.memory_to_store:
         await store.add_memory(request.user_id, item)
@@ -98,6 +145,7 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
             "history_messages": len(message_history),
             "streaming": False,
             "total_elapsed_ms": elapsed_ms,
+            **session_diagnostics,
         },
         usage=result.usage().opentelemetry_attributes(),
     )
@@ -128,7 +176,13 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
     active_model_name = request.model_name or (
         settings.llama_model if selected_backend == "llama_cpp" else settings.google_model
     )
-    session_id = request.session_id or uuid4().hex
+    session_id, message_history, session_diagnostics = await _resolve_chat_session(
+        store=store,
+        user_id=request.user_id,
+        requested_session_id=request.session_id,
+        backend=selected_backend,
+        model_name=active_model_name,
+    )
 
     if selected_model == "test":
         async def test_stream():
@@ -160,6 +214,7 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
                             "streaming": True,
                             "first_chunk_ms": 0,
                             "total_elapsed_ms": 0,
+                            **session_diagnostics,
                         },
                         usage={},
                     ).model_dump(mode="json"),
@@ -170,7 +225,6 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
 
     agent = build_local_tutor_agent(selected_model) if selected_backend == "llama_cpp" else build_tutor_agent(selected_model)
     deps = TutorDeps(user_id=request.user_id, store=store)
-    message_history = await store.load_chat_history(request.user_id, session_id)
     model_settings = _build_chat_model_settings(settings, selected_backend)
 
     async def event_stream():
@@ -228,7 +282,13 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
                         previous_message = current_message
 
                 output = _normalize_tutor_output(await result.get_output())
-                await store.save_chat_history(request.user_id, session_id, result.all_messages_json())
+                await store.save_chat_history(
+                    request.user_id,
+                    session_id,
+                    result.all_messages_json(),
+                    backend=selected_backend,
+                    model_name=active_model_name,
+                )
                 for item in output.memory_to_store:
                     await store.add_memory(request.user_id, item)
 
@@ -246,6 +306,7 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
                         "streaming": True,
                         "first_chunk_ms": first_chunk_ms,
                         "total_elapsed_ms": total_elapsed_ms,
+                        **session_diagnostics,
                     },
                     usage=result.usage().opentelemetry_attributes(),
                 )

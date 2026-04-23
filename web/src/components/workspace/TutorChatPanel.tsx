@@ -80,9 +80,12 @@ export function TutorChatPanel({ userId }: { userId: string }) {
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("gemini-3-flash-preview");
+  const [openReasoningTurnIds, setOpenReasoningTurnIds] = useState<Record<string, boolean>>({});
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
+  const activeStreamControllerRef = useRef<AbortController | null>(null);
+  const didInitializeRuntimeModelRef = useRef(false);
   const primaryAttachment = attachments[0] ?? null;
   const runtimeBackend = runtime?.backend ?? "google";
   const availableModelOptions = useMemo<ChatModelOption[]>(() => {
@@ -116,12 +119,15 @@ export function TutorChatPanel({ userId }: { userId: string }) {
 
   const helperText = useMemo(() => {
     if (isSending) return "튜터가 다음 학습 흐름을 준비하고 있어요.";
+    if (runtime && runtime.backend !== selectedModelBackend) {
+      return `현재 런타임은 ${runtime.backend} · ${runtime.model_name} 이고, 선택 모델은 ${selectedModelBackend} · ${selectedModelLabel} 입니다. 새 세션으로 분리해 전송합니다.`;
+    }
     if (sessionId) return `현재 세션이 이어지고 있어요. backend: ${selectedModelBackend} · model: ${selectedModelLabel}`;
     if (primaryAttachment) return `이미지 첨부됨 · ${primaryAttachment.file.name}`;
     return runtimeBackend === "llama_cpp"
       ? "로컬 llama.cpp 기본 런타임이 연결되어 있고, 기본 선택도 local 모델로 맞춰집니다."
       : "Hosted Google 기본 런타임이 연결되어 있어요. picker에서 local llama.cpp 모델도 선택할 수 있어요.";
-  }, [isSending, primaryAttachment, runtimeBackend, selectedModelBackend, selectedModelLabel, sessionId]);
+  }, [isSending, primaryAttachment, runtime, runtimeBackend, selectedModelBackend, selectedModelLabel, sessionId]);
 
   const runtimeBadgeLabel = useMemo(() => {
     if (!runtime) return "Runtime 확인 중";
@@ -139,7 +145,13 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         if (cancelled) return;
         const runtimeDefaultModel = resolveRuntimeDefaultModel(nextRuntime);
         setRuntime(nextRuntime);
-        setSelectedModel(runtimeDefaultModel);
+        setSelectedModel((current) => {
+          if (didInitializeRuntimeModelRef.current) {
+            return current;
+          }
+          didInitializeRuntimeModelRef.current = true;
+          return runtimeDefaultModel;
+        });
         const runtimeDefaultLabel =
           availableModelOptions.find((option) => option.value === runtimeDefaultModel)?.label
           ?? runtimeDefaultModel;
@@ -172,10 +184,17 @@ export function TutorChatPanel({ userId }: { userId: string }) {
   }, [isSending, turns]);
 
   useEffect(() => {
+    const attachmentUrls = attachments.map((attachment) => attachment.previewUrl);
     return () => {
-      attachments.forEach((attachment) => URL.revokeObjectURL(attachment.previewUrl));
+      attachmentUrls.forEach((previewUrl) => URL.revokeObjectURL(previewUrl));
     };
   }, [attachments]);
+
+  useEffect(() => {
+    return () => {
+      activeStreamControllerRef.current?.abort();
+    };
+  }, []);
 
   function updateAutoScrollState() {
     const transcript = transcriptRef.current;
@@ -201,6 +220,37 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     ]
       .filter(Boolean)
       .join("\n");
+  }
+
+  function toggleReasoning(turnId: string) {
+    setOpenReasoningTurnIds((current) => ({
+      ...current,
+      [turnId]: !current[turnId],
+    }));
+  }
+
+  function resetConversationForModelSwitch(nextModelLabel: string, nextModelBackend: string) {
+    activeStreamControllerRef.current?.abort();
+    activeStreamControllerRef.current = null;
+    setIsSending(false);
+    setSessionId(null);
+    setAttachments((current) => {
+      current.forEach((attachment) => URL.revokeObjectURL(attachment.previewUrl));
+      return [];
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setTurns([
+      ...initialTurns,
+      {
+        id: `session-reset-${Date.now()}`,
+        role: "assistant",
+        message: `모델이 ${nextModelLabel}로 바뀌어서 새 세션으로 다시 시작할게요.`,
+        meta: `session reset · ${nextModelBackend}`,
+      },
+    ]);
+    setStatus(`새 세션 준비됨 · ${nextModelLabel}`);
   }
 
   async function handleSubmit(message: string) {
@@ -257,9 +307,13 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         ]);
         setStatus(`이미지 학습 응답 완료 · ${selectedModel}`);
       } else {
+        activeStreamControllerRef.current?.abort();
+        const controller = new AbortController();
+        activeStreamControllerRef.current = controller;
         const response = await streamChatMessage(userId, trimmed, {
           sessionId,
           modelName: selectedModel,
+          signal: controller.signal,
           onMetadata: (event) => {
             setSessionId(event.session_id);
             setStatus(`스트림 연결됨 · ${event.model_name}`);
@@ -295,6 +349,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
             turn.id === pendingAssistantId ? buildCompletedAssistantTurn(turn, response) : turn,
           ),
         );
+        activeStreamControllerRef.current = null;
 
         const totalElapsedMs = Number(response.diagnostics.total_elapsed_ms ?? 0);
         setStatus(
@@ -304,6 +359,12 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         );
       }
     } catch (error) {
+      activeStreamControllerRef.current = null;
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setTurns((current) => current.filter((turn) => turn.id !== pendingAssistantId));
+        setStatus(`요청 취소됨 · ${selectedModelLabel}`);
+        return;
+      }
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       if (currentAttachment) {
         setTurns((current) => [
@@ -440,10 +501,20 @@ export function TutorChatPanel({ userId }: { userId: string }) {
 
               {turn.role === "assistant" && turn.reasoning?.trim() ? (
                 <div className="workspace-bubble__reasoning">
-                  <div className="workspace-bubble__reasoning-label">Reasoning</div>
-                  <div className="workspace-bubble__reasoning-text">
-                    {turn.reasoning.trim()}
-                  </div>
+                  <button
+                    type="button"
+                    className="workspace-bubble__reasoning-toggle"
+                    onClick={() => toggleReasoning(turn.id)}
+                    aria-expanded={Boolean(openReasoningTurnIds[turn.id])}
+                  >
+                    <span className="workspace-bubble__reasoning-label">Reasoning</span>
+                    <span>{openReasoningTurnIds[turn.id] ? "Hide" : "Show"}</span>
+                  </button>
+                  {openReasoningTurnIds[turn.id] ? (
+                    <div className="workspace-bubble__reasoning-text">
+                      {turn.reasoning.trim()}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -596,9 +667,12 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                         type="button"
                         className={`workspace-chat__model-option${option.value === selectedModel ? " is-selected" : ""}`}
                         onClick={() => {
+                          if (option.value !== selectedModel) {
+                            resetConversationForModelSwitch(option.label, option.backend);
+                          }
                           setSelectedModel(option.value);
                           setModelPickerOpen(false);
-                          setStatus(`연결됨 · ${option.label}`);
+                          setStatus(`모델 전환 중 · ${option.label}`);
                         }}
                       >
                         {option.label}

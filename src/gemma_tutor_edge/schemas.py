@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def utcnow() -> datetime:
@@ -17,6 +17,33 @@ class MemoryItem(BaseModel):
     content: str
     confidence: float = 0.7
     created_at: datetime = Field(default_factory=utcnow)
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def normalize_category(cls, value: object) -> str:
+        if not isinstance(value, str):
+            return "fact"
+
+        normalized = value.strip().lower().replace("_", " ").replace("-", " ")
+        if normalized in {"fact", "facts", "info", "information", "note", "notes"}:
+            return "fact"
+        if normalized in {"preference", "preferences", "pref", "like", "likes"}:
+            return "preference"
+        if normalized in {"weakness", "weaknesses", "weak point", "weak points", "mistake", "mistakes"}:
+            return "weakness"
+        if normalized in {"strength", "strengths", "strong point", "strong points", "skill", "skills"}:
+            return "strength"
+        if normalized in {"milestone", "milestones", "goal", "goals", "progress", "achievement"}:
+            return "milestone"
+        if "prefer" in normalized or "favorite" in normalized:
+            return "preference"
+        if "weak" in normalized or "error" in normalized or "incorrect" in normalized:
+            return "weakness"
+        if "strong" in normalized or "good at" in normalized or "improved" in normalized:
+            return "strength"
+        if "milestone" in normalized or "goal" in normalized or "progress" in normalized:
+            return "milestone"
+        return "fact"
 
 
 class ChatRequest(BaseModel):
@@ -42,6 +69,14 @@ class ChatResponse(BaseModel):
     reasoning: str | None = None
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     usage: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatSessionMeta(BaseModel):
+    session_id: str
+    user_id: str
+    backend: str | None = None
+    model_name: str | None = None
+    updated_at: datetime = Field(default_factory=utcnow)
 
 
 class QuizItem(BaseModel):

@@ -11,6 +11,7 @@ from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 from .schemas import (
     AchievementCard,
     BackgroundJob,
+    ChatSessionMeta,
     DashboardDetail,
     DashboardOverview,
     MemoryItem,
@@ -167,10 +168,18 @@ class SqliteStore:
                     session_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     messages_json TEXT NOT NULL,
+                    backend TEXT NULL,
+                    model_name TEXT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            cursor = await db.execute("PRAGMA table_info(chat_sessions)")
+            chat_session_columns = {row[1] for row in await cursor.fetchall()}
+            if "backend" not in chat_session_columns:
+                await db.execute("ALTER TABLE chat_sessions ADD COLUMN backend TEXT NULL")
+            if "model_name" not in chat_session_columns:
+                await db.execute("ALTER TABLE chat_sessions ADD COLUMN model_name TEXT NULL")
             await db.commit()
 
     async def seed_placeholders(self, user_id: str) -> None:
@@ -279,15 +288,64 @@ class SqliteStore:
             return []
         return ModelMessagesTypeAdapter.validate_json(row[0])
 
-    async def save_chat_history(self, user_id: str, session_id: str, messages_json: bytes | str) -> None:
+    async def get_chat_session_meta(self, user_id: str, session_id: str) -> ChatSessionMeta | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT session_id, user_id, backend, model_name, updated_at
+                FROM chat_sessions
+                WHERE user_id = ? AND session_id = ?
+                """,
+                (user_id, session_id),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return ChatSessionMeta(
+            session_id=row[0],
+            user_id=row[1],
+            backend=row[2],
+            model_name=row[3],
+            updated_at=row[4],
+        )
+
+    async def reset_chat_session(self, user_id: str, session_id: str) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                DELETE FROM chat_sessions
+                WHERE user_id = ? AND session_id = ?
+                """,
+                (user_id, session_id),
+            )
+            await db.commit()
+
+    async def save_chat_history(
+        self,
+        user_id: str,
+        session_id: str,
+        messages_json: bytes | str,
+        *,
+        backend: str | None = None,
+        model_name: str | None = None,
+    ) -> None:
         payload = messages_json.decode("utf-8") if isinstance(messages_json, bytes) else messages_json
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
-                INSERT OR REPLACE INTO chat_sessions(session_id, user_id, messages_json, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT OR REPLACE INTO chat_sessions(
+                    session_id, user_id, messages_json, backend, model_name, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (session_id, user_id, payload, datetime.utcnow().isoformat()),
+                (
+                    session_id,
+                    user_id,
+                    payload,
+                    backend,
+                    model_name,
+                    datetime.utcnow().isoformat(),
+                ),
             )
             await db.commit()
 

@@ -36,12 +36,12 @@ Focus on scene description, vocabulary extraction, and question-generation seeds
 """.strip()
 
 
-def build_tutor_agent(model) -> Agent[TutorDeps, TutorResponse]:
+def _build_tutor_agent(model, *, system_prompt: str) -> Agent[TutorDeps, TutorResponse]:
     agent: Agent[TutorDeps, TutorResponse] = Agent(
         model,
         deps_type=TutorDeps,
         output_type=TutorResponse,
-        system_prompt=TUTOR_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         tool_timeout=20,
     )
 
@@ -74,18 +74,20 @@ def build_tutor_agent(model) -> Agent[TutorDeps, TutorResponse]:
     return agent
 
 
-def build_local_tutor_agent(model) -> Agent[TutorDeps, str]:
-    return Agent(
+def build_tutor_agent(model) -> Agent[TutorDeps, TutorResponse]:
+    return _build_tutor_agent(model, system_prompt=TUTOR_SYSTEM_PROMPT)
+
+
+def build_local_tutor_agent(model) -> Agent[TutorDeps, TutorResponse]:
+    return _build_tutor_agent(
         model,
-        deps_type=TutorDeps,
-        output_type=str,
         system_prompt=(
             "You are Gemma Tutor Edge, a practical English tutor. "
             "Reply in Korean unless the learner asks for English. "
             "Keep answers short, concrete, and directly useful for TOEIC or English study. "
-            "Do not use tools. Do not emit JSON."
+            "Use tools when they help personalize or route the next study step. "
+            "Return a structured tutor response."
         ),
-        tool_timeout=20,
     )
 
 

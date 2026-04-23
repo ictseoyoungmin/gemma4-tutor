@@ -234,6 +234,7 @@ export async function streamChatMessage(
   options: {
     sessionId?: string | null;
     modelName?: string | null;
+    signal?: AbortSignal;
     onMetadata?: (event: Extract<ChatStreamEvent, { type: "metadata" }>) => void;
     onMetrics?: (event: Extract<ChatStreamEvent, { type: "metrics" }>) => void;
     onReasoningDelta?: (delta: string) => void;
@@ -249,6 +250,7 @@ export async function streamChatMessage(
       message,
       model_name: options.modelName ?? undefined,
     }),
+    signal: options.signal,
   });
   if (!response.ok) {
     const detail = await response.text();

@@ -586,6 +586,20 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.workspace-bubble__reasoning-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
 .workspace-bubble__reasoning-label {
   font-family: "Geist Mono", monospace;
   font-size: 10px;
