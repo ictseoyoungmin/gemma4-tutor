@@ -30,7 +30,7 @@ LOCAL_TUTOR_SYSTEM_PROMPT = (
     "Do not put full sentences in suggested_next_actions. "
     "Keep private reasoning out of the final message field. "
     "Use tools when they help personalize or route the next study step. "
-    "Return a structured tutor response."
+    "Keep learner-facing explanation separate from UI metadata."
 )
 
 

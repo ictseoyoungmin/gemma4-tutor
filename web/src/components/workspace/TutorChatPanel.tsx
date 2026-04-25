@@ -97,27 +97,6 @@ function buildEchoFallbackMessage(submittedMessage: string): string {
   return "질문을 그대로 반복하지 않고 다시 정리해볼게요.\n원하는 목표를 한 가지 더 구체적으로 알려주면 짧고 바로 쓸 수 있는 답으로 도와드릴게요.";
 }
 
-function normalizeSuggestionLabel(suggestion: string): string {
-  const trimmed = suggestion.trim();
-  if (!trimmed) return "";
-  if (/part\s*5|문법|오류|grammar/i.test(trimmed)) return "Part 5 풀기";
-  if (/교정|correct|문장/i.test(trimmed)) return "문장 교정";
-  if (/어휘|vocab|word/i.test(trimmed)) return "어휘 연습";
-  if (/ready\s*pack|ready pack/i.test(trimmed)) return "Ready Pack";
-  if (/다음|next|문제|practice|연습/i.test(trimmed)) return "다음 문제";
-  return trimmed.length > 12 ? `${trimmed.slice(0, 12).trim()}...` : trimmed;
-}
-
-function normalizeSuggestionLabels(suggestions: string[]): string[] {
-  return Array.from(
-    new Set(
-      suggestions
-        .map(normalizeSuggestionLabel)
-        .filter(Boolean),
-    ),
-  ).slice(0, 3);
-}
-
 function formatStreamMetrics(metrics: {
   elapsed_ms?: number;
   output_tokens?: number;
@@ -432,7 +411,6 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                   event.tokens_per_second ?? liveMetricSnapshot.tokens_per_second,
               };
               const metricsText = formatStreamMetrics(liveMetricSnapshot);
-              setStatus(metricsText);
               setTurns((current) =>
                 current.map((turn) =>
                   turn.id === pendingAssistantId
@@ -582,7 +560,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
       diagnostics,
       streamMetrics: undefined,
       meta: `intent: ${response.output.detected_intent}`,
-      suggestions: normalizeSuggestionLabels(response.output.suggested_next_actions),
+      suggestions: response.output.suggested_next_actions,
       isStreaming: false,
     };
   }

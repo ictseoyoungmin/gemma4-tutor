@@ -286,7 +286,61 @@ class SqliteStore:
             row = await cursor.fetchone()
         if row is None or not row[0]:
             return []
-        return ModelMessagesTypeAdapter.validate_json(row[0])
+        try:
+            return ModelMessagesTypeAdapter.validate_json(row[0])
+        except Exception:  # noqa: BLE001
+            return []
+
+    async def load_raw_chat_messages(
+        self,
+        user_id: str,
+        session_id: str,
+        *,
+        limit: int = 8,
+    ) -> list[dict[str, str]]:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT messages_json
+                FROM chat_sessions
+                WHERE user_id = ? AND session_id = ?
+                """,
+                (user_id, session_id),
+            )
+            row = await cursor.fetchone()
+        if row is None or not row[0]:
+            return []
+        try:
+            messages = json.loads(row[0])
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(messages, list):
+            return []
+        raw_messages = [
+            item
+            for item in messages
+            if isinstance(item, dict)
+            and item.get("role") in {"user", "assistant"}
+            and isinstance(item.get("content"), str)
+        ]
+        return raw_messages[-limit:]
+
+    async def save_raw_chat_messages(
+        self,
+        user_id: str,
+        session_id: str,
+        messages: list[dict[str, str]],
+        *,
+        backend: str | None = None,
+        model_name: str | None = None,
+    ) -> None:
+        await self.save_chat_history(
+            user_id,
+            session_id,
+            json.dumps(messages, ensure_ascii=False),
+            backend=backend,
+            model_name=model_name,
+        )
 
     async def get_chat_session_meta(self, user_id: str, session_id: str) -> ChatSessionMeta | None:
         async with aiosqlite.connect(self.db_path) as db:

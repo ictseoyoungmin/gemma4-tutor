@@ -46,6 +46,9 @@ from .schemas import (
 from .storage import SqliteStore
 from .toeic import TOEIC_ITEMS, get_item_by_id, select_next_item
 
+UI_JSON_START = "<ui_json>"
+UI_JSON_END = "</ui_json>"
+
 
 async def _resolve_chat_session(
     *,
@@ -205,6 +208,7 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
         requested_session_id=request.session_id,
         backend=selected_backend,
         model_name=active_model_name,
+        load_history=selected_backend != "llama_cpp",
     )
 
     if selected_model == "test":
@@ -356,7 +360,39 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
     return event_stream()
 
 
-def _build_raw_llama_payload(settings, request: ChatRequest, active_model_name: str) -> dict[str, object]:
+def _build_raw_llama_system_prompt(memories: list) -> str:
+    memory_lines = [
+        f"- {memory.category}: {memory.content}"
+        for memory in memories
+        if getattr(memory, "content", "").strip()
+    ]
+    memory_block = (
+        "\n\nRecent learner memory:\n" + "\n".join(memory_lines)
+        if memory_lines
+        else ""
+    )
+    routing_block = (
+        "\n\nAvailable tutor routes: chat, quiz_request, analysis, memory_update, image_learning. "
+        "If the learner asks for a next action, answer naturally and keep any button-like suggestion short."
+        "\n\nFor local UI metadata, finish every answer with a hidden block exactly like this:"
+        "\n<ui_json>"
+        '\n{"detected_intent":"chat","suggested_next_actions":["짧은 다음 행동 1","짧은 다음 행동 2"],"memory_to_store":[]}'
+        "\n</ui_json>"
+        "\nThe learner-facing answer must come before <ui_json>. "
+        "Do not mention <ui_json> in the learner-facing answer. "
+        "suggested_next_actions should be natural Korean button labels that fit the current answer."
+    )
+    return f"{LOCAL_TUTOR_SYSTEM_PROMPT}{memory_block}{routing_block}"
+
+
+def _build_raw_llama_payload(
+    settings,
+    request: ChatRequest,
+    active_model_name: str,
+    *,
+    raw_history: list[dict[str, str]],
+    memories: list,
+) -> dict[str, object]:
     effective_reasoning_enabled = (
         settings.llama_chat_thinking_enabled
         if request.reasoning_enabled is None
@@ -365,7 +401,8 @@ def _build_raw_llama_payload(settings, request: ChatRequest, active_model_name: 
     payload: dict[str, object] = {
         "model": active_model_name,
         "messages": [
-            {"role": "system", "content": LOCAL_TUTOR_SYSTEM_PROMPT},
+            {"role": "system", "content": _build_raw_llama_system_prompt(memories)},
+            *raw_history,
             {"role": "user", "content": request.message},
         ],
         "stream": True,
@@ -383,17 +420,6 @@ def _build_raw_llama_payload(settings, request: ChatRequest, active_model_name: 
     return payload
 
 
-def _short_suggestions_for_message(message: str) -> list[str]:
-    lowered = message.lower()
-    if "part 5" in lowered or "toeic" in lowered or "문법" in message:
-        return ["Part 5 풀기", "문법 점검"]
-    if "교정" in message or "correct" in lowered:
-        return ["문장 교정", "다시 쓰기"]
-    if "어휘" in message or "vocab" in lowered:
-        return ["어휘 연습", "예문 만들기"]
-    return ["다음 문제", "짧게 복습"]
-
-
 def _strip_reasoning_markers(text: str) -> str:
     stripped = text.strip()
     for marker in ("Thinking Process:", "Reasoning:", "Here's a thinking process"):
@@ -401,6 +427,104 @@ def _strip_reasoning_markers(text: str) -> str:
         if index >= 0:
             stripped = stripped[:index].strip()
     return stripped
+
+
+def _longest_suffix_matching_prefix(text: str, marker: str) -> int:
+    max_size = min(len(marker) - 1, len(text))
+    for size in range(max_size, 0, -1):
+        if marker.startswith(text[-size:]):
+            return size
+    return 0
+
+
+def _consume_raw_message_delta(delta: str, state: dict[str, object]) -> list[str]:
+    visible_parts: list[str] = []
+    text = f"{state.get('pending', '')}{delta}"
+    state["pending"] = ""
+
+    while text:
+        if state.get("in_ui_json"):
+            end_index = text.find(UI_JSON_END)
+            if end_index >= 0:
+                cast_parts = state["ui_json_parts"]
+                assert isinstance(cast_parts, list)
+                cast_parts.append(text[:end_index])
+                text = text[end_index + len(UI_JSON_END):]
+                state["in_ui_json"] = False
+                continue
+
+            keep = _longest_suffix_matching_prefix(text, UI_JSON_END)
+            cast_parts = state["ui_json_parts"]
+            assert isinstance(cast_parts, list)
+            cast_parts.append(text[:-keep] if keep else text)
+            state["pending"] = text[-keep:] if keep else ""
+            break
+
+        start_index = text.find(UI_JSON_START)
+        if start_index >= 0:
+            visible = text[:start_index]
+            if visible:
+                visible_parts.append(visible)
+            text = text[start_index + len(UI_JSON_START):]
+            state["in_ui_json"] = True
+            continue
+
+        keep = _longest_suffix_matching_prefix(text, UI_JSON_START)
+        visible = text[:-keep] if keep else text
+        if visible:
+            visible_parts.append(visible)
+        state["pending"] = text[-keep:] if keep else ""
+        break
+
+    return visible_parts
+
+
+def _flush_raw_message_state(state: dict[str, object]) -> list[str]:
+    pending = state.get("pending", "")
+    state["pending"] = ""
+    if not isinstance(pending, str) or not pending:
+        return []
+    if state.get("in_ui_json"):
+        cast_parts = state["ui_json_parts"]
+        assert isinstance(cast_parts, list)
+        cast_parts.append(pending)
+        return []
+    return [pending]
+
+
+def _parse_ui_json_block(ui_json_text: str) -> dict[str, object]:
+    stripped = ui_json_text.strip()
+    if not stripped:
+        return {}
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if start < 0 or end < start:
+        return {}
+    try:
+        parsed = json.loads(stripped[start:end + 1])
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _build_raw_tutor_response(raw_message: str, ui_json_text: str) -> TutorResponse:
+    message = _strip_reasoning_markers(raw_message)
+    metadata = _parse_ui_json_block(ui_json_text)
+    payload = {
+        "message": message or "응답을 생성하지 못했어요. 한 번 더 짧게 요청해 주세요.",
+        "detected_intent": metadata.get("detected_intent", "chat"),
+        "memory_to_store": metadata.get("memory_to_store", []),
+        "suggested_next_actions": metadata.get("suggested_next_actions", []),
+    }
+    try:
+        return TutorResponse.model_validate(payload)
+    except Exception:  # noqa: BLE001
+        return TutorResponse(
+            message=payload["message"],
+            detected_intent="chat",
+            memory_to_store=[],
+            suggested_next_actions=[],
+        )
 
 
 def _build_raw_llama_chat_stream(
@@ -417,6 +541,17 @@ def _build_raw_llama_chat_stream(
         first_chunk_ms: float | None = None
         message_parts: list[str] = []
         reasoning_parts: list[str] = []
+        message_state: dict[str, object] = {
+            "pending": "",
+            "in_ui_json": False,
+            "ui_json_parts": [],
+        }
+        raw_history = (
+            await store.load_raw_chat_messages(request.user_id, session_id)
+            if request.session_id
+            else []
+        )
+        memories = await store.list_recent_memories(request.user_id, limit=5)
 
         yield _ndjson(
             {
@@ -436,7 +571,13 @@ def _build_raw_llama_chat_stream(
                     "POST",
                     url,
                     headers=headers,
-                    json=_build_raw_llama_payload(settings, request, active_model_name),
+                    json=_build_raw_llama_payload(
+                        settings,
+                        request,
+                        active_model_name,
+                        raw_history=raw_history,
+                        memories=memories,
+                    ),
                 ) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
@@ -466,22 +607,32 @@ def _build_raw_llama_chat_stream(
                             reasoning_parts.append(reasoning_delta)
                             yield _ndjson({"type": "reasoning_delta", "delta": reasoning_delta})
                         if message_delta:
-                            message_parts.append(message_delta)
-                            yield _ndjson({"type": "message_delta", "delta": message_delta})
+                            for visible_delta in _consume_raw_message_delta(
+                                message_delta,
+                                message_state,
+                            ):
+                                message_parts.append(visible_delta)
+                                yield _ndjson({"type": "message_delta", "delta": visible_delta})
 
             total_elapsed_ms = round((perf_counter() - started_at) * 1000, 1)
-            message = _strip_reasoning_markers("".join(message_parts))
+            for visible_delta in _flush_raw_message_state(message_state):
+                message_parts.append(visible_delta)
+                yield _ndjson({"type": "message_delta", "delta": visible_delta})
+            ui_json_parts = message_state["ui_json_parts"]
+            assert isinstance(ui_json_parts, list)
+            message = "".join(message_parts)
+            ui_json_text = "".join(str(part) for part in ui_json_parts)
             reasoning = "".join(reasoning_parts).strip() or None
-            output = TutorResponse(
-                message=message or "응답을 생성하지 못했어요. 한 번 더 짧게 요청해 주세요.",
-                detected_intent="chat",
-                memory_to_store=[],
-                suggested_next_actions=_short_suggestions_for_message(request.message),
-            )
-            await store.save_chat_history(
+            output = _build_raw_tutor_response(message, ui_json_text)
+            next_history = [
+                *raw_history,
+                {"role": "user", "content": request.message},
+                {"role": "assistant", "content": output.message},
+            ][-8:]
+            await store.save_raw_chat_messages(
                 request.user_id,
                 session_id,
-                "[]",
+                next_history,
                 backend="llama_cpp",
                 model_name=active_model_name,
             )
@@ -493,7 +644,8 @@ def _build_raw_llama_chat_stream(
                 diagnostics={
                     "backend": "llama_cpp",
                     "model_name": active_model_name,
-                    "history_messages": 0,
+                    "history_messages": len(raw_history),
+                    "memory_items": len(memories),
                     "streaming": True,
                     "stream_mode": "raw_llama_cpp",
                     "reasoning_enabled": request.reasoning_enabled,

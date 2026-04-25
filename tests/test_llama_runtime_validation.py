@@ -13,7 +13,14 @@ from gemma_tutor_edge.llm import (
     validate_requested_model_name,
 )
 from gemma_tutor_edge.schemas import ChatRequest, TutorResponse
-from gemma_tutor_edge.services import _build_chat_model_settings, analyze_image, handle_chat
+from gemma_tutor_edge.services import (
+    _build_chat_model_settings,
+    _build_raw_tutor_response,
+    _consume_raw_message_delta,
+    _flush_raw_message_state,
+    analyze_image,
+    handle_chat,
+)
 from gemma_tutor_edge.storage import SqliteStore
 
 
@@ -102,6 +109,48 @@ def test_build_chat_model_settings_honors_per_request_reasoning_override(tmp_pat
     assert disabled["thinking"] is False
     assert "extra_body" not in disabled
     assert hosted is None
+
+
+def test_raw_tutor_response_parses_hidden_ui_json():
+    output = _build_raw_tutor_response(
+        "빈칸 주변 품사를 먼저 확인하세요.\n",
+        (
+            '{"detected_intent":"quiz_request",'
+            '"suggested_next_actions":["Part 5 문제 풀기","다른 팁"],'
+            '"memory_to_store":[]}'
+        ),
+    )
+
+    assert output.message == "빈칸 주변 품사를 먼저 확인하세요."
+    assert output.detected_intent == "quiz_request"
+    assert output.suggested_next_actions == ["Part 5 문제 풀기", "다른 팁"]
+
+
+def test_raw_stream_delta_hides_ui_json_from_visible_output():
+    state: dict[str, object] = {
+        "pending": "",
+        "in_ui_json": False,
+        "ui_json_parts": [],
+    }
+
+    visible = []
+    visible.extend(_consume_raw_message_delta("답변입니다.\n<ui_", state))
+    visible.extend(_consume_raw_message_delta('json>{"detected_intent":"chat"', state))
+    visible.extend(_consume_raw_message_delta(',"suggested_next_actions":["연습하기"]}</ui_json>', state))
+    visible.extend(_flush_raw_message_state(state))
+
+    assert "".join(visible) == "답변입니다.\n"
+    assert "".join(state["ui_json_parts"]) == (
+        '{"detected_intent":"chat","suggested_next_actions":["연습하기"]}'
+    )
+
+
+def test_raw_tutor_response_falls_back_on_malformed_ui_json():
+    output = _build_raw_tutor_response("답변입니다.", "{not json")
+
+    assert output.message == "답변입니다."
+    assert output.detected_intent == "chat"
+    assert output.suggested_next_actions == []
 
 
 @pytest.mark.asyncio
