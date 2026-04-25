@@ -24,3 +24,4 @@ docs/structure_and_plan
 package-lock.json
 .skills
 .venv*
+minimal

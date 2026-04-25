@@ -94,7 +94,7 @@ Acceptance:
 
 Priority: `P1`
 
-Status: `pending`
+Status: `in progress`
 
 Objective:
 
@@ -112,6 +112,11 @@ Acceptance:
 - Developers can still see first-token and total latency.
 - Learners are not distracted by raw diagnostics in normal use.
 - Long-running local responses communicate progress clearly.
+
+Completed work:
+
+- Changed learner-visible first-token and total-time labels from millisecond values to seconds.
+- Kept the live stream meter in seconds so the chat UI uses one consistent time unit.
 
 ### Slice 4. Image-Attachment Local Quality Pass
 

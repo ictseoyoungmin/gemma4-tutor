@@ -114,6 +114,10 @@ function formatStreamMetrics(metrics: {
   return `${phase} · ${totalTokens} tokens · ${elapsedSeconds.toFixed(1)}s · ${tokensPerSecond.toFixed(2)} tokens/s`;
 }
 
+function formatElapsedSeconds(milliseconds: number): string {
+  return `${(milliseconds / 1000).toFixed(1)}s`;
+}
+
 function resolveRuntimeDefaultModel(runtime: HealthResponse | null): string {
   if (!runtime) return "gemini-3-flash-preview";
   return runtime.model_name;
@@ -421,7 +425,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
               return;
             }
             if (event.first_chunk_ms !== undefined) {
-              setStatus(`첫 토큰 수신 · ${event.first_chunk_ms.toFixed(0)}ms · ${selectedModel}`);
+              setStatus(`첫 토큰 수신 · ${formatElapsedSeconds(event.first_chunk_ms)} · ${selectedModel}`);
             }
           },
           onReasoningDelta: (delta) => {
@@ -473,7 +477,7 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         const responseReasoningEnabled = response.diagnostics.reasoning_enabled === true;
         setStatus(
           totalElapsedMs > 0
-            ? `응답 수신 완료 · reasoning ${responseReasoningEnabled ? "on" : "off"} · ${Math.round(totalElapsedMs)}ms`
+            ? `응답 수신 완료 · reasoning ${responseReasoningEnabled ? "on" : "off"} · ${formatElapsedSeconds(totalElapsedMs)}`
             : `응답 수신 완료 · reasoning ${responseReasoningEnabled ? "on" : "off"}`,
         );
       }
@@ -526,8 +530,8 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     const firstChunkMs = Number(response.diagnostics.first_chunk_ms ?? 0);
     const totalElapsedMs = Number(response.diagnostics.total_elapsed_ms ?? 0);
     const diagnostics = [
-      firstChunkMs > 0 ? `first ${Math.round(firstChunkMs)}ms` : "",
-      totalElapsedMs > 0 ? `total ${Math.round(totalElapsedMs)}ms` : "",
+      firstChunkMs > 0 ? `first ${formatElapsedSeconds(firstChunkMs)}` : "",
+      totalElapsedMs > 0 ? `total ${formatElapsedSeconds(totalElapsedMs)}` : "",
     ]
       .filter(Boolean)
       .join(" · ");
