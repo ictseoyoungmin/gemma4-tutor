@@ -578,6 +578,27 @@
   white-space: pre-wrap;
 }
 
+.workspace-bubble__stream-meter {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 7px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--a2);
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+.workspace-bubble__streaming-text {
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
+}
+
 .workspace-bubble__reasoning {
   margin-top: 10px;
   padding: 8px 10px;
@@ -606,6 +627,12 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--a3);
+}
+
+.workspace-bubble__reasoning-state {
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--a4);
 }
 
 .workspace-bubble__reasoning-text {
@@ -807,6 +834,11 @@
 .workspace-chat__ghost:hover {
   background: var(--bg3);
   color: var(--t0);
+}
+
+.workspace-chat__ghost.is-active {
+  border-color: var(--a3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .workspace-chat__ghost:disabled {

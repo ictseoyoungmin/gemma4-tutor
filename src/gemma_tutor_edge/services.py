@@ -4,7 +4,10 @@ import json
 from time import perf_counter
 from uuid import uuid4
 
+import httpx
+
 from .agents import (
+    LOCAL_TUTOR_SYSTEM_PROMPT,
     build_local_tutor_agent,
     build_quiz_agent,
     build_tutor_agent,
@@ -51,6 +54,7 @@ async def _resolve_chat_session(
     requested_session_id: str | None,
     backend: str,
     model_name: str,
+    load_history: bool = True,
 ) -> tuple[str, list, dict[str, object]]:
     session_id = requested_session_id or uuid4().hex
     diagnostics: dict[str, object] = {}
@@ -76,6 +80,9 @@ async def _resolve_chat_session(
         )
         return new_session_id, [], diagnostics
 
+    if not load_history:
+        return requested_session_id, [], diagnostics
+
     return requested_session_id, await store.load_chat_history(user_id, requested_session_id), diagnostics
 
 
@@ -92,6 +99,7 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
         requested_session_id=request.session_id,
         backend=selected_backend,
         model_name=active_model_name,
+        load_history=selected_backend != "llama_cpp",
     )
     started_at = perf_counter()
     if selected_model == "test":
@@ -120,7 +128,11 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
         request.message,
         deps=deps,
         message_history=message_history,
-        model_settings=_build_chat_model_settings(settings, selected_backend),
+        model_settings=_build_chat_model_settings(
+            settings,
+            selected_backend,
+            reasoning_enabled=request.reasoning_enabled,
+        ),
     )
     await store.save_chat_history(
         request.user_id,
@@ -144,6 +156,7 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
             "model_name": getattr(response_message, "model_name", None) or active_model_name,
             "history_messages": len(message_history),
             "streaming": False,
+            "reasoning_enabled": request.reasoning_enabled,
             "total_elapsed_ms": elapsed_ms,
             **session_diagnostics,
         },
@@ -151,15 +164,25 @@ async def handle_chat(*, model, store: SqliteStore, request: ChatRequest) -> Cha
     )
 
 
-def _build_chat_model_settings(settings, selected_backend: str) -> dict[str, object] | None:
+def _build_chat_model_settings(
+    settings,
+    selected_backend: str,
+    *,
+    reasoning_enabled: bool | None = None,
+) -> dict[str, object] | None:
     if selected_backend != "llama_cpp":
         return None
+    effective_reasoning_enabled = (
+        settings.llama_chat_thinking_enabled
+        if reasoning_enabled is None
+        else reasoning_enabled
+    )
     model_settings: dict[str, object] = {
         "max_tokens": settings.llama_chat_max_tokens,
     }
     if settings.llama_chat_temperature is not None:
         model_settings["temperature"] = settings.llama_chat_temperature
-    if settings.llama_chat_thinking_enabled:
+    if effective_reasoning_enabled:
         model_settings["thinking"] = True
         model_settings["extra_body"] = {
             "reasoning_format": "auto",
@@ -212,6 +235,7 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
                             "model_name": "test",
                             "history_messages": 0,
                             "streaming": True,
+                            "reasoning_enabled": request.reasoning_enabled,
                             "first_chunk_ms": 0,
                             "total_elapsed_ms": 0,
                             **session_diagnostics,
@@ -223,9 +247,23 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
 
         return test_stream()
 
+    if selected_backend == "llama_cpp":
+        return _build_raw_llama_chat_stream(
+            settings=settings,
+            store=store,
+            request=request,
+            session_id=session_id,
+            active_model_name=active_model_name,
+            session_diagnostics=session_diagnostics,
+        )
+
     agent = build_local_tutor_agent(selected_model) if selected_backend == "llama_cpp" else build_tutor_agent(selected_model)
     deps = TutorDeps(user_id=request.user_id, store=store)
-    model_settings = _build_chat_model_settings(settings, selected_backend)
+    model_settings = _build_chat_model_settings(
+        settings,
+        selected_backend,
+        reasoning_enabled=request.reasoning_enabled,
+    )
 
     async def event_stream():
         started_at = perf_counter()
@@ -304,6 +342,7 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
                         "model_name": getattr(response_message, "model_name", None) or active_model_name,
                         "history_messages": len(message_history),
                         "streaming": True,
+                        "reasoning_enabled": request.reasoning_enabled,
                         "first_chunk_ms": first_chunk_ms,
                         "total_elapsed_ms": total_elapsed_ms,
                         **session_diagnostics,
@@ -311,6 +350,160 @@ async def build_chat_stream(*, model, store: SqliteStore, request: ChatRequest):
                     usage=result.usage().opentelemetry_attributes(),
                 )
                 yield _ndjson({"type": "final", "response": final_response.model_dump(mode="json")})
+        except Exception as exc:  # noqa: BLE001
+            yield _ndjson({"type": "error", "message": str(exc)})
+
+    return event_stream()
+
+
+def _build_raw_llama_payload(settings, request: ChatRequest, active_model_name: str) -> dict[str, object]:
+    effective_reasoning_enabled = (
+        settings.llama_chat_thinking_enabled
+        if request.reasoning_enabled is None
+        else request.reasoning_enabled
+    )
+    payload: dict[str, object] = {
+        "model": active_model_name,
+        "messages": [
+            {"role": "system", "content": LOCAL_TUTOR_SYSTEM_PROMPT},
+            {"role": "user", "content": request.message},
+        ],
+        "stream": True,
+        "max_tokens": settings.llama_chat_max_tokens,
+    }
+    if settings.llama_chat_temperature is not None:
+        payload["temperature"] = settings.llama_chat_temperature
+    if effective_reasoning_enabled:
+        payload["thinking"] = True
+        payload["reasoning_format"] = "auto"
+        payload["chat_template_kwargs"] = {"enable_thinking": True}
+    else:
+        payload["thinking"] = False
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
+    return payload
+
+
+def _short_suggestions_for_message(message: str) -> list[str]:
+    lowered = message.lower()
+    if "part 5" in lowered or "toeic" in lowered or "문법" in message:
+        return ["Part 5 풀기", "문법 점검"]
+    if "교정" in message or "correct" in lowered:
+        return ["문장 교정", "다시 쓰기"]
+    if "어휘" in message or "vocab" in lowered:
+        return ["어휘 연습", "예문 만들기"]
+    return ["다음 문제", "짧게 복습"]
+
+
+def _strip_reasoning_markers(text: str) -> str:
+    stripped = text.strip()
+    for marker in ("Thinking Process:", "Reasoning:", "Here's a thinking process"):
+        index = stripped.lower().find(marker.lower())
+        if index >= 0:
+            stripped = stripped[:index].strip()
+    return stripped
+
+
+def _build_raw_llama_chat_stream(
+    *,
+    settings,
+    store: SqliteStore,
+    request: ChatRequest,
+    session_id: str,
+    active_model_name: str,
+    session_diagnostics: dict[str, object],
+):
+    async def event_stream():
+        started_at = perf_counter()
+        first_chunk_ms: float | None = None
+        message_parts: list[str] = []
+        reasoning_parts: list[str] = []
+
+        yield _ndjson(
+            {
+                "type": "metadata",
+                "session_id": session_id,
+                "backend": "llama_cpp",
+                "model_name": active_model_name,
+                "stream_mode": "raw_llama_cpp",
+            }
+        )
+
+        try:
+            url = f"{settings.llama_base_url.rstrip('/')}/chat/completions"
+            headers = {"Authorization": f"Bearer {settings.llama_api_key}"}
+            async with httpx.AsyncClient(timeout=None) as client:
+                async with client.stream(
+                    "POST",
+                    url,
+                    headers=headers,
+                    json=_build_raw_llama_payload(settings, request, active_model_name),
+                ) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line.removeprefix("data:").strip()
+                        if not data or data == "[DONE]":
+                            break
+                        chunk = json.loads(data)
+                        choices = chunk.get("choices") or []
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta") or {}
+                        reasoning_delta = (
+                            delta.get("reasoning_content")
+                            or delta.get("reasoning")
+                            or delta.get("thinking")
+                            or ""
+                        )
+                        message_delta = delta.get("content") or ""
+
+                        if first_chunk_ms is None and (reasoning_delta or message_delta):
+                            first_chunk_ms = round((perf_counter() - started_at) * 1000, 1)
+                            yield _ndjson({"type": "metrics", "first_chunk_ms": first_chunk_ms})
+
+                        if reasoning_delta:
+                            reasoning_parts.append(reasoning_delta)
+                            yield _ndjson({"type": "reasoning_delta", "delta": reasoning_delta})
+                        if message_delta:
+                            message_parts.append(message_delta)
+                            yield _ndjson({"type": "message_delta", "delta": message_delta})
+
+            total_elapsed_ms = round((perf_counter() - started_at) * 1000, 1)
+            message = _strip_reasoning_markers("".join(message_parts))
+            reasoning = "".join(reasoning_parts).strip() or None
+            output = TutorResponse(
+                message=message or "응답을 생성하지 못했어요. 한 번 더 짧게 요청해 주세요.",
+                detected_intent="chat",
+                memory_to_store=[],
+                suggested_next_actions=_short_suggestions_for_message(request.message),
+            )
+            await store.save_chat_history(
+                request.user_id,
+                session_id,
+                "[]",
+                backend="llama_cpp",
+                model_name=active_model_name,
+            )
+            final_response = ChatResponse(
+                session_id=session_id,
+                run_id=f"llama-raw-{uuid4().hex[:8]}",
+                output=output,
+                reasoning=reasoning,
+                diagnostics={
+                    "backend": "llama_cpp",
+                    "model_name": active_model_name,
+                    "history_messages": 0,
+                    "streaming": True,
+                    "stream_mode": "raw_llama_cpp",
+                    "reasoning_enabled": request.reasoning_enabled,
+                    "first_chunk_ms": first_chunk_ms,
+                    "total_elapsed_ms": total_elapsed_ms,
+                    **session_diagnostics,
+                },
+                usage={},
+            )
+            yield _ndjson({"type": "final", "response": final_response.model_dump(mode="json")})
         except Exception as exc:  # noqa: BLE001
             yield _ndjson({"type": "error", "message": str(exc)})
 

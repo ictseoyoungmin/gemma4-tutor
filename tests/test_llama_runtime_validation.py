@@ -13,7 +13,7 @@ from gemma_tutor_edge.llm import (
     validate_requested_model_name,
 )
 from gemma_tutor_edge.schemas import ChatRequest, TutorResponse
-from gemma_tutor_edge.services import analyze_image, handle_chat
+from gemma_tutor_edge.services import _build_chat_model_settings, analyze_image, handle_chat
 from gemma_tutor_edge.storage import SqliteStore
 
 
@@ -69,6 +69,39 @@ def test_resolve_active_model_name_uses_backend_specific_default(tmp_path: Path)
 
     assert resolve_active_model_name(google_settings) == "gemini-2.5-flash"
     assert resolve_active_model_name(llama_settings) == "gemma-4-E2B-it-Q4_K_M.gguf"
+
+
+def test_build_chat_model_settings_honors_per_request_reasoning_override(tmp_path: Path):
+    settings = Settings(
+        llm_backend="llama_cpp",
+        llama_chat_thinking_enabled=False,
+        app_db_path=tmp_path / "settings.db",
+        app_storage_dir=tmp_path / "storage",
+    )
+
+    enabled = _build_chat_model_settings(
+        settings,
+        "llama_cpp",
+        reasoning_enabled=True,
+    )
+    disabled = _build_chat_model_settings(
+        settings,
+        "llama_cpp",
+        reasoning_enabled=False,
+    )
+    hosted = _build_chat_model_settings(
+        settings,
+        "google",
+        reasoning_enabled=True,
+    )
+
+    assert enabled is not None
+    assert enabled["thinking"] is True
+    assert enabled["extra_body"] == {"reasoning_format": "auto"}
+    assert disabled is not None
+    assert disabled["thinking"] is False
+    assert "extra_body" not in disabled
+    assert hosted is None
 
 
 @pytest.mark.asyncio

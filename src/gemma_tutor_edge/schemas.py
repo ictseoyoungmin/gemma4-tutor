@@ -51,6 +51,7 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
     message: str
     model_name: str | None = None
+    reasoning_enabled: bool | None = None
 
 
 class TutorResponse(BaseModel):

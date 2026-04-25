@@ -202,6 +202,7 @@ export async function sendChatMessage(
   message: string,
   sessionId?: string | null,
   modelName?: string | null,
+  reasoningEnabled?: boolean | null,
 ): Promise<ChatResponse> {
   const response = await fetch(`${API_BASE}/v1/chat`, {
     method: "POST",
@@ -211,6 +212,7 @@ export async function sendChatMessage(
       session_id: sessionId ?? undefined,
       message,
       model_name: modelName ?? undefined,
+      reasoning_enabled: reasoningEnabled ?? undefined,
     }),
   });
   if (!response.ok) {
@@ -222,7 +224,15 @@ export async function sendChatMessage(
 
 type ChatStreamEvent =
   | { type: "metadata"; session_id: string; backend: string; model_name: string }
-  | { type: "metrics"; first_chunk_ms: number }
+  | {
+      type: "metrics";
+      first_chunk_ms?: number;
+      elapsed_ms?: number;
+      output_tokens?: number;
+      reasoning_tokens?: number;
+      total_tokens?: number;
+      tokens_per_second?: number;
+    }
   | { type: "reasoning_delta"; delta: string }
   | { type: "message_delta"; delta: string }
   | { type: "final"; response: ChatResponse }
@@ -263,12 +273,48 @@ function handleChatStreamEvent(
   return null;
 }
 
+function buildIncompleteStreamResponse(args: {
+  sessionId?: string | null;
+  modelName?: string | null;
+  message: string;
+  reasoning: string;
+  firstChunkMs?: number | null;
+}): ChatResponse {
+  return {
+    session_id: args.sessionId || `incomplete-${Date.now()}`,
+    run_id: `stream-incomplete-${Date.now()}`,
+    output: {
+      message:
+        args.message.trim() ||
+        "응답을 이어서 정리하는 중이에요.",
+      detected_intent: "chat",
+      memory_to_store: [],
+      suggested_next_actions: [],
+    },
+    reasoning: args.reasoning || null,
+    diagnostics: {
+      streaming: true,
+      incomplete_stream: true,
+      model_name: args.modelName ?? "unknown",
+      first_chunk_ms: args.firstChunkMs ?? undefined,
+    },
+    usage: {},
+  };
+}
+
+function estimateTokenCount(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return Math.max(1, Math.round(trimmed.length / 3.6));
+}
+
 export async function streamChatMessage(
   userId: string,
   message: string,
   options: {
     sessionId?: string | null;
     modelName?: string | null;
+    reasoningEnabled?: boolean | null;
     signal?: AbortSignal;
     onMetadata?: (event: Extract<ChatStreamEvent, { type: "metadata" }>) => void;
     onMetrics?: (event: Extract<ChatStreamEvent, { type: "metrics" }>) => void;
@@ -284,6 +330,7 @@ export async function streamChatMessage(
       session_id: options.sessionId ?? undefined,
       message,
       model_name: options.modelName ?? undefined,
+      reasoning_enabled: options.reasoningEnabled ?? undefined,
     }),
     signal: options.signal,
   });
@@ -299,6 +346,59 @@ export async function streamChatMessage(
   const decoder = new TextDecoder();
   let buffer = "";
   let finalResponse: ChatResponse | null = null;
+  let streamSessionId: string | null = options.sessionId ?? null;
+  let streamModelName: string | null = options.modelName ?? null;
+  let firstChunkMs: number | null = null;
+  let streamedMessage = "";
+  let streamedReasoning = "";
+  const streamStartedAt = performance.now();
+
+  function emitLiveMetrics() {
+    const elapsedMs = Math.max(1, performance.now() - streamStartedAt);
+    const outputTokens = estimateTokenCount(streamedMessage);
+    const reasoningTokens = estimateTokenCount(streamedReasoning);
+    const totalTokens = outputTokens + reasoningTokens;
+    options.onMetrics?.({
+      type: "metrics",
+      first_chunk_ms: firstChunkMs ?? undefined,
+      elapsed_ms: elapsedMs,
+      output_tokens: outputTokens,
+      reasoning_tokens: reasoningTokens,
+      total_tokens: totalTokens,
+      tokens_per_second: totalTokens > 0 ? totalTokens / (elapsedMs / 1000) : 0,
+    });
+  }
+
+  const streamOptions = {
+    ...options,
+    onMetadata: (event: Extract<ChatStreamEvent, { type: "metadata" }>) => {
+      streamSessionId = event.session_id;
+      streamModelName = event.model_name;
+      options.onMetadata?.(event);
+    },
+    onMetrics: (event: Extract<ChatStreamEvent, { type: "metrics" }>) => {
+      if (event.first_chunk_ms !== undefined) {
+        firstChunkMs = event.first_chunk_ms;
+      }
+      options.onMetrics?.(event);
+    },
+    onReasoningDelta: (delta: string) => {
+      if (firstChunkMs === null) {
+        firstChunkMs = performance.now() - streamStartedAt;
+      }
+      streamedReasoning += delta;
+      options.onReasoningDelta?.(delta);
+      emitLiveMetrics();
+    },
+    onMessageDelta: (delta: string) => {
+      if (firstChunkMs === null) {
+        firstChunkMs = performance.now() - streamStartedAt;
+      }
+      streamedMessage += delta;
+      options.onMessageDelta?.(delta);
+      emitLiveMetrics();
+    },
+  };
 
   while (true) {
     const { value, done } = await reader.read();
@@ -309,7 +409,7 @@ export async function streamChatMessage(
       const line = buffer.slice(0, newlineIndex).trim();
       buffer = buffer.slice(newlineIndex + 1);
       if (line) {
-        finalResponse = handleChatStreamEvent(line, options) ?? finalResponse;
+        finalResponse = handleChatStreamEvent(line, streamOptions) ?? finalResponse;
       }
       newlineIndex = buffer.indexOf("\n");
     }
@@ -319,11 +419,30 @@ export async function streamChatMessage(
 
   const trailingLine = buffer.trim();
   if (trailingLine) {
-    finalResponse = handleChatStreamEvent(trailingLine, options) ?? finalResponse;
+    finalResponse = handleChatStreamEvent(trailingLine, streamOptions) ?? finalResponse;
   }
 
   if (!finalResponse) {
-    throw new Error("Streaming chat finished without a final response payload.");
+    if (!streamedMessage.trim()) {
+      try {
+        return await sendChatMessage(
+          userId,
+          message,
+          streamSessionId,
+          streamModelName,
+          options.reasoningEnabled,
+        );
+      } catch {
+        // Fall through to a non-error fallback so the learner-facing chat does not flip to request.error.
+      }
+    }
+    return buildIncompleteStreamResponse({
+      sessionId: streamSessionId,
+      modelName: streamModelName,
+      message: streamedMessage,
+      reasoning: streamedReasoning,
+      firstChunkMs,
+    });
   }
   return finalResponse;
 }

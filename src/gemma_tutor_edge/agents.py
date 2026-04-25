@@ -20,6 +20,20 @@ Your goals:
 """.strip()
 
 
+LOCAL_TUTOR_SYSTEM_PROMPT = (
+    "You are Gemma Tutor Edge, a practical English tutor. "
+    "Reply in Korean unless the learner asks for English. "
+    "Keep answers short, concrete, and directly useful for TOEIC or English study. "
+    "Never copy the learner's message as the final answer. "
+    "If the learner asks for a tip, provide one specific tip with a short example or next action. "
+    "Suggested next actions must be short button labels, ideally 2 to 5 Korean words. "
+    "Do not put full sentences in suggested_next_actions. "
+    "Keep private reasoning out of the final message field. "
+    "Use tools when they help personalize or route the next study step. "
+    "Return a structured tutor response."
+)
+
+
 QUIZ_SYSTEM_PROMPT = """
 You generate compact, high-quality English learning quiz packs.
 Constraints:
@@ -81,13 +95,7 @@ def build_tutor_agent(model) -> Agent[TutorDeps, TutorResponse]:
 def build_local_tutor_agent(model) -> Agent[TutorDeps, TutorResponse]:
     return _build_tutor_agent(
         model,
-        system_prompt=(
-            "You are Gemma Tutor Edge, a practical English tutor. "
-            "Reply in Korean unless the learner asks for English. "
-            "Keep answers short, concrete, and directly useful for TOEIC or English study. "
-            "Use tools when they help personalize or route the next study step. "
-            "Return a structured tutor response."
-        ),
+        system_prompt=LOCAL_TUTOR_SYSTEM_PROMPT,
     )
 
 
