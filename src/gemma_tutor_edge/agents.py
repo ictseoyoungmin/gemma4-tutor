@@ -42,7 +42,7 @@ def _build_tutor_agent(model, *, system_prompt: str) -> Agent[TutorDeps, TutorRe
         deps_type=TutorDeps,
         output_type=TutorResponse,
         system_prompt=system_prompt,
-        tool_timeout=20,
+        tool_timeout=120,
     )
 
     @agent.tool
@@ -97,7 +97,7 @@ def build_quiz_agent(model) -> Agent[ContentDeps, QuizPack]:
         deps_type=ContentDeps,
         output_type=QuizPack,
         system_prompt=QUIZ_SYSTEM_PROMPT,
-        tool_timeout=20,
+        tool_timeout=120,
     )
 
 
@@ -107,7 +107,7 @@ def build_vision_agent(model) -> Agent[ContentDeps, ImageAnalysisResponse]:
         deps_type=ContentDeps,
         output_type=ImageAnalysisResponse,
         system_prompt=VISION_SYSTEM_PROMPT,
-        tool_timeout=30,
+        tool_timeout=120,
     )
 
 

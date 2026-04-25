@@ -346,7 +346,9 @@ export function TutorChatPanel({ userId }: { userId: string }) {
         setSessionId(response.session_id);
         setTurns((current) =>
           current.map((turn) =>
-            turn.id === pendingAssistantId ? buildCompletedAssistantTurn(turn, response) : turn,
+            turn.id === pendingAssistantId
+              ? buildCompletedAssistantTurn(turn, response, trimmed)
+              : turn,
           ),
         );
         activeStreamControllerRef.current = null;
@@ -396,7 +398,11 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     }
   }
 
-  function buildCompletedAssistantTurn(turn: ChatTurn, response: ChatResponse): ChatTurn {
+  function buildCompletedAssistantTurn(
+    turn: ChatTurn,
+    response: ChatResponse,
+    submittedMessage: string,
+  ): ChatTurn {
     const firstChunkMs = Number(response.diagnostics.first_chunk_ms ?? 0);
     const totalElapsedMs = Number(response.diagnostics.total_elapsed_ms ?? 0);
     const diagnostics = [
@@ -405,11 +411,26 @@ export function TutorChatPanel({ userId }: { userId: string }) {
     ]
       .filter(Boolean)
       .join(" · ");
+    const finalMessage = response.output.message.trim();
+    const streamedMessage = turn.message.trim();
+    const normalizedSubmittedMessage = submittedMessage.trim().toLowerCase();
+    const normalizedFinalMessage = finalMessage.toLowerCase();
+    const looksLikePromptEcho =
+      normalizedFinalMessage.length > 0 && normalizedFinalMessage === normalizedSubmittedMessage;
+    const looksLikeReasoningLeak =
+      normalizedFinalMessage.startsWith("thinking process") ||
+      normalizedFinalMessage.startsWith("1. **analyze the request:**");
+    const shouldPreferStreamedMessage =
+      streamedMessage.length > 0 && (
+        finalMessage.length === 0 ||
+        looksLikePromptEcho ||
+        looksLikeReasoningLeak
+      );
 
     return {
       ...turn,
       id: response.run_id,
-      message: response.output.message,
+      message: shouldPreferStreamedMessage ? turn.message : response.output.message,
       reasoning: response.reasoning ?? turn.reasoning ?? "",
       diagnostics,
       meta: `intent: ${response.output.detected_intent}`,

@@ -228,6 +228,41 @@ type ChatStreamEvent =
   | { type: "final"; response: ChatResponse }
   | { type: "error"; message: string };
 
+function handleChatStreamEvent(
+  line: string,
+  options: {
+    onMetadata?: (event: Extract<ChatStreamEvent, { type: "metadata" }>) => void;
+    onMetrics?: (event: Extract<ChatStreamEvent, { type: "metrics" }>) => void;
+    onReasoningDelta?: (delta: string) => void;
+    onMessageDelta?: (delta: string) => void;
+  },
+): ChatResponse | null {
+  const event = JSON.parse(line) as ChatStreamEvent;
+  if (event.type === "metadata") {
+    options.onMetadata?.(event);
+    return null;
+  }
+  if (event.type === "metrics") {
+    options.onMetrics?.(event);
+    return null;
+  }
+  if (event.type === "reasoning_delta") {
+    options.onReasoningDelta?.(event.delta);
+    return null;
+  }
+  if (event.type === "message_delta") {
+    options.onMessageDelta?.(event.delta);
+    return null;
+  }
+  if (event.type === "error") {
+    throw new Error(event.message);
+  }
+  if (event.type === "final") {
+    return event.response;
+  }
+  return null;
+}
+
 export async function streamChatMessage(
   userId: string,
   message: string,
@@ -274,25 +309,17 @@ export async function streamChatMessage(
       const line = buffer.slice(0, newlineIndex).trim();
       buffer = buffer.slice(newlineIndex + 1);
       if (line) {
-        const event = JSON.parse(line) as ChatStreamEvent;
-        if (event.type === "metadata") {
-          options.onMetadata?.(event);
-        } else if (event.type === "metrics") {
-          options.onMetrics?.(event);
-        } else if (event.type === "reasoning_delta") {
-          options.onReasoningDelta?.(event.delta);
-        } else if (event.type === "message_delta") {
-          options.onMessageDelta?.(event.delta);
-        } else if (event.type === "error") {
-          throw new Error(event.message);
-        } else if (event.type === "final") {
-          finalResponse = event.response;
-        }
+        finalResponse = handleChatStreamEvent(line, options) ?? finalResponse;
       }
       newlineIndex = buffer.indexOf("\n");
     }
 
     if (done) break;
+  }
+
+  const trailingLine = buffer.trim();
+  if (trailingLine) {
+    finalResponse = handleChatStreamEvent(trailingLine, options) ?? finalResponse;
   }
 
   if (!finalResponse) {
