@@ -658,6 +658,34 @@
   background: var(--a4);
 }
 
+.workspace-bubble__stats {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  font-family: "Geist Mono", monospace;
+  font-size: 10px;
+  color: var(--a4);
+}
+
+.workspace-bubble__stats summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.workspace-bubble__stats summary::-webkit-details-marker {
+  display: none;
+}
+
+.workspace-bubble__stats summary::before {
+  content: "•";
+  margin-right: 5px;
+  color: var(--a4);
+}
+
+.workspace-bubble__stats div {
+  margin-top: 4px;
+}
+
 .workspace-suggestion-row {
   display: flex;
   flex-wrap: wrap;

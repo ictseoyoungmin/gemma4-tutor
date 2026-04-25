@@ -690,10 +690,10 @@ export function TutorChatPanel({ userId }: { userId: string }) {
               ) : null}
 
               {turn.diagnostics ? (
-                <div className="workspace-bubble__meta">
-                  <div className="workspace-bubble__meta-dot" />
-                  {turn.diagnostics}
-                </div>
+                <details className="workspace-bubble__stats">
+                  <summary>Stats</summary>
+                  <div>{turn.diagnostics}</div>
+                </details>
               ) : null}
 
               {turn.suggestions?.length ? (

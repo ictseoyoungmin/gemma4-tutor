@@ -94,7 +94,7 @@ Acceptance:
 
 Priority: `P1`
 
-Status: `in progress`
+Status: `completed`
 
 Objective:
 
@@ -117,6 +117,7 @@ Completed work:
 
 - Changed learner-visible first-token and total-time labels from millisecond values to seconds.
 - Kept the live stream meter in seconds so the chat UI uses one consistent time unit.
+- Moved completed-response first/total latency into a compact expandable `Stats` affordance so normal learner chat is less noisy.
 
 ### Slice 4. Image-Attachment Local Quality Pass
 
