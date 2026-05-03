@@ -2,17 +2,17 @@ services:
   llama:
     image: ghcr.io/ggml-org/llama.cpp:server
     environment:
-      LLAMA_GGUF_PATH: ${LLAMA_GGUF_PATH:-/models/gemma-4-E2B-it-Q4_K_M.gguf}
-      LLAMA_MMPROJ_PATH: ${LLAMA_MMPROJ_PATH:-/models/mmproj-F16.gguf}
+      LLAMA_GGUF_PATH: /models/gemma-4-E2B-it-Q4_K_M.gguf
+      LLAMA_MMPROJ_PATH: /models/mmproj-F16.gguf
     volumes:
       - ${HOST_MODEL_DIR:-./models}:/models:ro
     ports:
       - "8080:8080"
     command:
       - -m
-      - ${LLAMA_GGUF_PATH:-/models/gemma-4-E2B-it-Q4_K_M.gguf}
+      - /models/gemma-4-E2B-it-Q4_K_M.gguf
       - --mmproj
-      - ${LLAMA_MMPROJ_PATH:-/models/mmproj-F16.gguf}
+      - /models/mmproj-F16.gguf
       - --host
       - 0.0.0.0
       - --port
@@ -39,13 +39,14 @@ services:
       LLM_BACKEND: ${LLM_BACKEND:-google}
       LLAMA_BASE_URL: ${LLAMA_BASE_URL:-http://llama:8080/v1}
       LLAMA_MODEL: ${LLAMA_MODEL:-gemma-4-E2B-it-Q4_K_M.gguf}
-      MODEL_DIR: ${MODEL_DIR:-/models}
-      LLAMA_GGUF_PATH: ${LLAMA_GGUF_PATH:-/models/gemma-4-E2B-it-Q4_K_M.gguf}
-      LLAMA_MMPROJ_PATH: ${LLAMA_MMPROJ_PATH:-/models/mmproj-F16.gguf}
+      MODEL_DIR: /models
+      LLAMA_GGUF_PATH: /models/gemma-4-E2B-it-Q4_K_M.gguf
+      LLAMA_MMPROJ_PATH: /models/mmproj-F16.gguf
       VALIDATE_LLAMA_ASSETS: ${VALIDATE_LLAMA_ASSETS:-false}
     volumes:
       - ./src:/app/src
       - ./data:/app/data
+      - ./scripts:/app/scripts
       - ${HOST_MODEL_DIR:-./models}:/models:ro
       - ./README.md:/app/README.md:ro
       - ./pyproject.toml:/app/pyproject.toml:ro

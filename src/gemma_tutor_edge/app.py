@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -50,9 +52,40 @@ model = build_model(settings)
 worker_controller = WorkerController(project_root=Path(__file__).resolve().parents[2])
 
 
+async def _wait_for_llama_ready() -> None:
+    if settings.llm_backend != "llama_cpp":
+        return
+
+    models_url = f"{settings.llama_base_url.rstrip('/')}/models"
+    timeout = httpx.Timeout(5.0, connect=5.0)
+    last_error: Exception | None = None
+
+    # Wait for llama.cpp to finish loading tensors before the API starts serving traffic.
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for _ in range(90):
+            try:
+                response = await client.get(
+                    models_url,
+                    headers={"Authorization": f"Bearer {settings.llama_api_key}"},
+                )
+                if response.status_code == 200:
+                    return
+                last_error = RuntimeError(
+                    f"llama.cpp is not ready yet: GET {models_url} returned {response.status_code}"
+                )
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+            await asyncio.sleep(2)
+
+    raise RuntimeError(
+        f"Timed out waiting for llama.cpp to become ready at {models_url}."
+    ) from last_error
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await store.init()
+    await _wait_for_llama_ready()
     try:
         yield
     finally:

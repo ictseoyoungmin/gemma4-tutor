@@ -850,12 +850,12 @@ export function TutorChatPanel({ userId }: { userId: string }) {
                         type="button"
                         className={`workspace-chat__model-option${option.value === selectedModel ? " is-selected" : ""}`}
                         onClick={() => {
+                          setStatus(`모델 전환 중 · ${option.label}`);
                           if (option.value !== selectedModel) {
                             resetConversationForModelSwitch(option.label, option.backend);
                           }
                           setSelectedModel(option.value);
                           setModelPickerOpen(false);
-                          setStatus(`모델 전환 중 · ${option.label}`);
                         }}
                       >
                         {option.label}
